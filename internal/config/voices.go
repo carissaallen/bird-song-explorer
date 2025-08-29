@@ -19,8 +19,7 @@ type VoiceManager struct {
 	dailySeed       int
 }
 
-// Production-ready, kid-friendly voices from different regions
-// These have been vetted for natural sound and appropriate tone
+// Voices chosen from different regions
 // NOTE: Run scripts/generate_regional_intros.sh to create intros for new voices
 var DefaultVoices = []VoiceProfile{
 	{
