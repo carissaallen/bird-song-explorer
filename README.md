@@ -1,6 +1,10 @@
-# Bird Song Explorer 🎵
+<p align="center">
+<img src="assets/cover/cover.PNG" alt="Bird Song Explorer Cover" width="300" style="border-radius:20px"/>
+</p>
 
-A smart Yoto card that brings local birds to your child's speaker every day. Wake up to the actual birds singing in your neighborhood, learn fun facts, and develop a connection with nature—all through the magic of a Yoto card.
+# Bird Song Explorer 
+
+> A smart Yoto card that brings local birds to your child's speaker every day. Wake up to the actual birds singing in your neighborhood, learn fun facts, and develop a connection with nature—all through the magic of a Yoto card.
 
 ## What It Does
 
