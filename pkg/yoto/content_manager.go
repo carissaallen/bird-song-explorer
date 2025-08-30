@@ -154,7 +154,7 @@ func (cm *ContentManager) UpdateCardContent(cardID string, contentID string) err
 		return fmt.Errorf("authentication failed: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/cards/%s/content", cm.client.baseURL, cardID)
+	url := fmt.Sprintf("%s/content/%s", cm.client.baseURL, cardID)
 
 	updateReq := UpdateCardContentRequest{
 		ContentID: contentID,

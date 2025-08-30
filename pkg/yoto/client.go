@@ -110,24 +110,17 @@ func (c *Client) authenticate() error {
 		if refreshToken := os.Getenv("YOTO_REFRESH_TOKEN"); refreshToken != "" {
 			c.refreshToken = refreshToken
 		}
-		// Parse JWT to get expiry time
 		if exp := extractTokenExpiry(accessToken); exp > 0 {
 			c.tokenExpiry = time.Unix(exp, 0)
-			fmt.Printf("Loaded tokens from environment, expires at %v\n", c.tokenExpiry)
 		} else {
-			// If we can't parse expiry, assume token is valid for 24 hours
 			c.tokenExpiry = time.Now().Add(24 * time.Hour)
-			fmt.Printf("Loaded tokens from environment (assumed 24h validity)\n")
 		}
 	}
 
-	// If we have a refresh token, try to refresh (will be needed if token is expired)
 	if c.refreshToken != "" && time.Now().After(c.tokenExpiry) {
-		fmt.Printf("Token expired or not set, refreshing...\n")
 		return c.refreshAccessToken()
 	}
 
-	// If we have an access token and it's still valid, use it
 	if c.accessToken != "" {
 		return nil
 	}
@@ -136,7 +129,6 @@ func (c *Client) authenticate() error {
 }
 
 func (c *Client) refreshAccessToken() error {
-	fmt.Printf("Attempting to refresh access token...\n")
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("client_id", c.clientID)
@@ -171,23 +163,17 @@ func (c *Client) refreshAccessToken() error {
 	}
 	c.tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
 
-	fmt.Printf("Successfully refreshed access token, expires in %d seconds\n", tokenResp.ExpiresIn)
 	return nil
 }
 
 func (c *Client) ensureAuthenticated() error {
-	// If no access token at all, authenticate
 	if c.accessToken == "" {
 		return c.authenticate()
 	}
 
-	// If token is expired or about to expire (within 5 minutes), refresh it
 	if time.Now().After(c.tokenExpiry.Add(-5 * time.Minute)) {
 		if c.refreshToken != "" {
-			// Try to refresh, but if it fails, continue with existing token
 			if err := c.refreshAccessToken(); err != nil {
-				// Log the error but don't fail if we still have a token
-				fmt.Printf("Warning: Failed to refresh token: %v\n", err)
 				if c.accessToken == "" {
 					return err
 				}
@@ -238,7 +224,7 @@ func (c *Client) UpdateCard(cardID string, update UpdateCardRequest) (*Card, err
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/cards/%s", c.baseURL, cardID)
+	url := fmt.Sprintf("%s/content/%s", c.baseURL, cardID)
 
 	jsonBody, err := json.Marshal(update)
 	if err != nil {

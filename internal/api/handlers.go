@@ -33,6 +33,13 @@ func NewHandler(cfg *config.Config) *Handler {
 		cfg.YotoAPIBaseURL,
 	)
 
+	// Set the access and refresh tokens if available
+	if cfg.YotoAccessToken != "" && cfg.YotoRefreshToken != "" {
+		// The expiresIn is not stored, so we'll use a default of 24 hours
+		// The client will check token expiry and refresh as needed
+		yotoClient.SetTokens(cfg.YotoAccessToken, cfg.YotoRefreshToken, 86400)
+	}
+
 	return &Handler{
 		config:                  cfg,
 		locationService:         services.NewLocationService(),
@@ -78,6 +85,12 @@ func (h *Handler) GetBirdOfDay(c *gin.Context) {
 }
 
 func (h *Handler) HandleYotoWebhook(c *gin.Context) {
+	// Check if this is an OAuth callback (has 'code' query parameter)
+	if code := c.Query("code"); code != "" {
+		h.HandleOAuthCallback(c)
+		return
+	}
+
 	var webhook struct {
 		EventType string `json:"eventType"`
 		CardID    string `json:"cardId"`

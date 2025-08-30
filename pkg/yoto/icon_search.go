@@ -68,7 +68,8 @@ func (is *IconSearcher) SearchBirdIcon(birdName string) (string, error) {
 	}
 	is.cacheMu.RUnlock()
 
-	// Search yotoicons.com first (more likely to have bird-specific icons)
+	// First try the full bird name (might get lucky with exact match)
+	fmt.Printf("Searching yotoicons.com for: %s\n", birdName)
 	yotoiconsResult, err := is.searchYotoicons(birdName)
 	if err == nil && yotoiconsResult != nil {
 		// Upload the icon from yotoicons.com to Yoto
@@ -87,10 +88,9 @@ func (is *IconSearcher) SearchBirdIcon(birdName string) (string, error) {
 			is.cache[birdName] = result
 			is.cacheMu.Unlock()
 
+			fmt.Printf("Found icon for %s using full name\n", birdName)
 			return FormatIconID(mediaID), nil
-		} else if err != nil {
 		}
-	} else if err != nil {
 	}
 
 	// Try variations of the bird name on yotoicons
@@ -228,26 +228,44 @@ func (is *IconSearcher) searchYotoicons(query string) (*IconSearchResult, error)
 	}
 
 	html := string(body)
+	lowerHTML := strings.ToLower(html)
 
 	// Parse HTML to find icon images
 	iconRegex := regexp.MustCompile(`<img[^>]+src=["']/static/uploads/(\d+)\.png["'][^>]*>`)
 	matches := iconRegex.FindAllStringSubmatch(html, 10)
 
-	// Also check if we're on a "no results" page or the generic bird icon page
-	// yotoicons.com shows a generic bird when no specific match is found
+	// Check if we're on a "no results" page
 	if strings.Contains(html, "No icons found") || strings.Contains(html, "no results") {
 		fmt.Printf("No results found on yotoicons.com for: %s\n", query)
 		return nil, fmt.Errorf("no icons found on yotoicons")
 	}
 
 	if len(matches) > 0 {
-		// Check if this is likely the generic bird icon by looking for common generic terms
-		// We want to avoid using generic bird icons
-		lowerHTML := strings.ToLower(html)
-		if strings.Contains(lowerHTML, "generic") ||
-			(query != "bird" && strings.Contains(lowerHTML, "bird icon")) {
-			fmt.Printf("Found only generic bird icon for %s, skipping\n", query)
-			return nil, fmt.Errorf("only generic bird icon found")
+		// NEW LOGIC: For bird searches, we want to ensure we're getting actual bird icons
+		// Check if the search term appears in the page AND the word "bird" appears
+		// This helps confirm we found a bird-related icon
+		lowerQuery := strings.ToLower(query)
+
+		// For single-word bird types (like "Robin"), check if both the bird type AND "bird" appear
+		hasSearchTerm := strings.Contains(lowerHTML, lowerQuery)
+		hasBirdKeyword := strings.Contains(lowerHTML, "bird")
+
+		// Accept the result if:
+		// 1. We found the search term AND it's a bird page (has "bird" keyword)
+		// 2. OR the query itself is "bird" (looking for generic bird)
+		if (hasSearchTerm && hasBirdKeyword) || lowerQuery == "bird" {
+			fmt.Printf("Found bird icon for %s (search term: %v, bird keyword: %v)\n",
+				query, hasSearchTerm, hasBirdKeyword)
+		} else if !hasBirdKeyword {
+			// If "bird" doesn't appear on the page, this might not be a bird icon
+			fmt.Printf("Warning: Search for %s returned results but no 'bird' keyword found\n", query)
+			// Still continue, but log the warning
+		}
+
+		// Avoid truly generic results only when we have no bird association
+		if strings.Contains(lowerHTML, "generic") && !hasSearchTerm {
+			fmt.Printf("Found only generic icon for %s, skipping\n", query)
+			return nil, fmt.Errorf("only generic icon found")
 		}
 
 		// Use the first match

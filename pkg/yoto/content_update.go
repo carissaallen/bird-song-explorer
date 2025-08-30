@@ -17,13 +17,13 @@ import (
 
 // UpdateContentRequest represents the request body for updating card content
 type UpdateContentRequest struct {
-	CardID            string   `json:"cardId"`
+	CardID            string   `json:"cardId"` // Use cardId for POST requests
 	UserID            string   `json:"userId"`
 	CreatedByClientID string   `json:"createdByClientId"`
 	Title             string   `json:"title"`
 	Content           Content  `json:"content"`
 	Metadata          Metadata `json:"metadata"`
-	CreatedAt         string   `json:"createdAt"`
+	CreatedAt         string   `json:"createdAt,omitempty"`
 	UpdatedAt         string   `json:"updatedAt"`
 }
 
@@ -159,12 +159,16 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionAndVoice(cardI
 
 	outroData, err := cm.generateOutro(birdName, voiceID)
 	if err != nil {
+		// Log the error but don't fail the entire update
+		fmt.Printf("Warning: Failed to generate outro: %v\n", err)
 		hasOutro = false
 	} else if outroData == nil || len(outroData) == 0 {
+		fmt.Printf("Warning: Outro data is empty\n")
 		hasOutro = false
 	} else {
 		outroSha, outroInfo, err = cm.uploader.UploadAudioData(outroData, "See You Tomorrow Explorers")
 		if err != nil {
+			fmt.Printf("Warning: Failed to upload outro: %v\n", err)
 			hasOutro = false
 		} else {
 			hasOutro = true
@@ -332,6 +336,10 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionAndVoice(cardI
 		})
 	}
 
+	// Log chapter count for debugging
+	fmt.Printf("Building content update: %d chapters (hasAnnouncement: %v, hasDescription: %v, hasOutro: %v)\n",
+		len(chapters), hasAnnouncement, hasDescription, hasOutro)
+
 	// Add outro chapter if generated successfully
 	if hasOutro {
 		outroChapterKey := "04"
@@ -425,7 +433,7 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionAndVoice(cardI
 			}
 
 			updateReq := map[string]interface{}{
-				"cardId":            cardID,
+				"cardId":            cardID, // Use cardId for POST requests
 				"userId":            userID,
 				"createdByClientId": clientID,
 				"title":             "Bird Song Explorer", // Keep original title
@@ -442,7 +450,7 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionAndVoice(cardI
 	}
 
 	updateReq := UpdateContentRequest{
-		CardID:            cardID,
+		CardID:            cardID, // Include CardID for POST requests
 		UserID:            userID,
 		CreatedByClientID: clientID,
 		Title:             "Bird Song Explorer", // Keep original title
@@ -459,6 +467,7 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionAndVoice(cardI
 
 // sendUpdateRequest sends the update request to the Yoto API
 func (cm *ContentManager) sendUpdateRequest(cardID string, updateReq interface{}, birdName string) error {
+	// Use POST request to /content for updating existing content
 	url := fmt.Sprintf("%s/content", cm.client.baseURL)
 
 	jsonData, err := json.Marshal(updateReq)
@@ -481,6 +490,9 @@ func (cm *ContentManager) sendUpdateRequest(cardID string, updateReq interface{}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+
+	// Log success for debugging
+	fmt.Printf("Content update response (%d): Updated %s, body length: %d\n", resp.StatusCode, birdName, len(body))
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("failed to update content: %d - %s", resp.StatusCode, string(body))
@@ -577,6 +589,9 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 	// Generate outro text based on day and bird
 	outroManager := services.NewOutroManager()
 	outroText := outroManager.GenerateOutroText(birdName, dayOfWeek)
+
+	// Log the outro text for debugging
+	fmt.Printf("Generating outro for %s on %s: %s\n", birdName, dayOfWeek.String(), outroText)
 
 	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)

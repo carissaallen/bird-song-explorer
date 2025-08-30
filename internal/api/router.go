@@ -28,6 +28,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		v1.GET("/audio/intro", handler.GetRandomIntro)
 		v1.POST("/update-card/:cardId", handler.UpdateCardManually)
 		v1.POST("/daily-update", handler.DailyUpdateHandler)
+		v1.POST("/yoto/token/refresh", handler.HandleTokenRefresh)
+		v1.GET("/test/yoto-upload", handler.TestYotoUploadURL)
+		v1.GET("/test/yoto-card", handler.TestYotoCard)
 	}
 
 	return router

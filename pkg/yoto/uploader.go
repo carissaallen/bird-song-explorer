@@ -202,6 +202,11 @@ func (au *AudioUploader) UploadAudioFromURL(audioURL string, title string) (stri
 
 // UploadAudioData uploads raw audio data to Yoto
 func (au *AudioUploader) UploadAudioData(audioData []byte, title string) (string, *TranscodeResponse, error) {
+	// Ensure we're authenticated before trying to upload
+	if err := au.client.ensureAuthenticated(); err != nil {
+		return "", nil, fmt.Errorf("authentication failed: %w", err)
+	}
+
 	uploadURL, uploadID, err := au.getUploadURL()
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to get upload URL: %w", err)
