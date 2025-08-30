@@ -74,7 +74,7 @@ func (iu *IconUploader) UploadIcon(filePath string, filename string) (string, er
 	}
 
 	// Build URL with query parameters
-	url := fmt.Sprintf("%s/media/displayIcons/user/me/upload?autoConvert=true&filename=%s",
+	url := fmt.Sprintf("%s/media/displayIcons/user/me/upload?autoConvert=false&filename=%s",
 		iu.client.baseURL, filename)
 
 	// Create request with raw image data (as shown in Yoto docs)
