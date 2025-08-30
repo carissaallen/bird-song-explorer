@@ -1,5 +1,5 @@
 <p align="center">
-<img src="assets/cover/cover.PNG" alt="Bird Song Explorer Cover" width="300" style="border-radius:20px"/>
+<img src="assets/cover/cover_custom.png" alt="Bird Song Explorer Yoto Cover" width="300" style="border-radius:20px"/>
 </p>
 
 # Bird Song Explorer 
