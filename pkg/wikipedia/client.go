@@ -12,6 +12,7 @@ import (
 type Client struct {
 	httpClient *http.Client
 	baseURL    string
+	englishURL string
 }
 
 type PageSummary struct {
@@ -26,27 +27,66 @@ type PageSummary struct {
 	} `json:"content_urls"`
 }
 
+type ComprehensiveSummary struct {
+	BirdName       string
+	SimpleExtract  string
+	EnglishExtract string
+}
+
 func NewClient() *Client {
 	return &Client{
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		// Using Simple English Wikipedia for more kid-friendly content
-		baseURL: "https://simple.wikipedia.org/api/rest_v1",
+		// Using both Simple and English Wikipedia for comprehensive content
+		baseURL:    "https://simple.wikipedia.org/api/rest_v1",
+		englishURL: "https://en.wikipedia.org/api/rest_v1",
 	}
 }
 
 func (c *Client) GetBirdSummary(birdName string) (*PageSummary, error) {
-	encodedName := url.QueryEscape(strings.ReplaceAll(birdName, " ", "_"))
+	// Try Simple Wikipedia first for kid-friendly content
+	summary, err := c.fetchSummary(birdName, c.baseURL)
+	if err == nil && summary != nil && summary.Extract != "" {
+		return summary, nil
+	}
 
-	apiURL := fmt.Sprintf("%s/page/summary/%s", c.baseURL, encodedName)
+	// Fall back to English Wikipedia for more detailed content
+	return c.fetchSummary(birdName, c.englishURL)
+}
+
+// GetComprehensiveSummary fetches from both Simple and English Wikipedia
+func (c *Client) GetComprehensiveSummary(birdName string) (*ComprehensiveSummary, error) {
+	result := &ComprehensiveSummary{
+		BirdName: birdName,
+	}
+
+	// Get Simple Wikipedia content (kid-friendly)
+	if simple, err := c.fetchSummary(birdName, c.baseURL); err == nil && simple != nil {
+		result.SimpleExtract = simple.Extract
+	}
+
+	// Get English Wikipedia content (detailed)
+	if english, err := c.fetchSummary(birdName, c.englishURL); err == nil && english != nil {
+		result.EnglishExtract = english.Extract
+	}
+
+	if result.SimpleExtract == "" && result.EnglishExtract == "" {
+		return nil, fmt.Errorf("no Wikipedia content found for %s", birdName)
+	}
+
+	return result, nil
+}
+
+func (c *Client) fetchSummary(birdName string, baseURL string) (*PageSummary, error) {
+	encodedName := url.QueryEscape(strings.ReplaceAll(birdName, " ", "_"))
+	apiURL := fmt.Sprintf("%s/page/summary/%s", baseURL, encodedName)
 
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Wikipedia requires a User-Agent header
 	req.Header.Set("User-Agent", "BirdSongExplorer/1.0 (https://github.com/callen/bird-song-explorer)")
 
 	resp, err := c.httpClient.Do(req)
@@ -56,23 +96,21 @@ func (c *Client) GetBirdSummary(birdName string) (*PageSummary, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		scientificNameParts := strings.Split(birdName, " ")
-		if len(scientificNameParts) >= 2 {
-			encodedName = url.QueryEscape(strings.ReplaceAll(scientificNameParts[0]+" "+scientificNameParts[1], " ", "_"))
-			apiURL = fmt.Sprintf("%s/page/summary/%s", c.baseURL, encodedName)
+		// Try with underscores replaced by spaces in URL
+		encodedName = url.QueryEscape(strings.ReplaceAll(strings.ToLower(birdName), " ", "_"))
+		apiURL = fmt.Sprintf("%s/page/summary/%s", baseURL, encodedName)
 
-			req, err = http.NewRequest("GET", apiURL, nil)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create request: %w", err)
-			}
-			req.Header.Set("User-Agent", "BirdSongExplorer/1.0 (https://github.com/callen/bird-song-explorer)")
-
-			resp, err = c.httpClient.Do(req)
-			if err != nil {
-				return nil, fmt.Errorf("failed to fetch Wikipedia summary: %w", err)
-			}
-			defer resp.Body.Close()
+		req, err = http.NewRequest("GET", apiURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
+		req.Header.Set("User-Agent", "BirdSongExplorer/1.0 (https://github.com/callen/bird-song-explorer)")
+
+		resp, err = c.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch Wikipedia summary: %w", err)
+		}
+		defer resp.Body.Close()
 	}
 
 	if resp.StatusCode != http.StatusOK {

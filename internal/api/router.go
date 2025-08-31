@@ -19,6 +19,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	// Serve static audio files
 	router.Static("/audio/intros", "./final_intros")
+	router.Static("/audio/outros", "./final_outros")
 	router.Static("/audio/cache", "./audio_cache") // This already serves everything under audio_cache including dynamic_intros
 
 	v1 := router.Group("/api/v1")

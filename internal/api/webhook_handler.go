@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/callen/bird-song-explorer/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
@@ -88,17 +89,35 @@ func (h *Handler) HandleYotoWebhookV2(c *gin.Context) {
 		return
 	}
 
+	timeHelper := services.NewUserTimeHelper()
+	userContext := timeHelper.GetUserTimeContext(deviceTimezone)
+	log.Printf("User Time Context - Timezone: %s, Local Time: %v, Hour: %v, Nature Sound: %v",
+		deviceTimezone, userContext["local_time"], userContext["hour"], userContext["nature_sound"])
+
+	timezoneLogger := services.NewTimezoneLogger()
+	timezoneLogger.LogTimezoneUsage(webhook.DeviceID, webhook.CardID, deviceTimezone, location.City)
+
 	// Generate intro and get the voice ID that was used
 	baseURL := fmt.Sprintf("https://%s", c.Request.Host)
 	var voiceID string
-	introURL, err := h.introGenerator.GetDynamicIntroURL(bird.CommonName, baseURL)
-	if err != nil {
-		// Fall back to static intro and get the voice ID
-		introURL, voiceID = h.audioManager.GetRandomIntroURL(baseURL)
+
+	var introURL string
+
+	if h.audioManager.IsNatureMixEnabled() && deviceTimezone != "" {
+		introURL, voiceID = h.audioManager.GetRandomIntroWithNatureForTimezone(baseURL, deviceTimezone)
+		log.Printf("Using nature-mixed intro for timezone %s with %s sounds",
+			deviceTimezone, userContext["nature_sound"])
 	} else {
-		// When using dynamic intro, we also need to get the voice ID
-		// The dynamic intro should use the same daily voice
-		_, voiceID = h.audioManager.GetRandomIntroURL(baseURL)
+		// Fall back to regular intro selection
+		var err error
+		introURL, err = h.introGenerator.GetDynamicIntroURL(bird.CommonName, baseURL)
+		if err != nil {
+			// Fall back to static intro and get the voice ID
+			introURL, voiceID = h.audioManager.GetRandomIntroURL(baseURL)
+		} else {
+			// The dynamic intro should use the same daily voice
+			_, voiceID = h.audioManager.GetRandomIntroURL(baseURL)
+		}
 	}
 
 	// Update the card with location-specific bird using the voice from the intro
@@ -121,6 +140,7 @@ func (h *Handler) HandleYotoWebhookV2(c *gin.Context) {
 		return
 	}
 
+	// Include user time context in response
 	c.JSON(http.StatusOK, gin.H{
 		"status":         "success",
 		"message":        fmt.Sprintf("Card updated with %s for %s", bird.CommonName, location.City),
@@ -128,6 +148,10 @@ func (h *Handler) HandleYotoWebhookV2(c *gin.Context) {
 		"localDate":      localDate,
 		"timezone":       tz.String(),
 		"deviceTimezone": deviceTimezone,
+		"userLocalTime":  userContext["local_time"],
+		"userHour":       userContext["hour"],
+		"natureSound":    userContext["nature_sound"],
+		"timePeriod":     userContext["time_period"],
 	})
 }
 

@@ -13,16 +13,23 @@ import (
 )
 
 type AudioManager struct {
-	introDir  string
-	cacheDir  string
-	introURLs []string // URLs where intros are hosted
+	introDir     string
+	cacheDir     string
+	introURLs    []string
+	introMixer   *IntroMixer
+	useNatureMix bool
+	timeHelper   *UserTimeHelper
 }
 
 func NewAudioManager() *AudioManager {
+	audioConfig := config.GetAudioConfig()
 	return &AudioManager{
-		introDir:  "final_intros",
-		cacheDir:  "audio_cache",
-		introURLs: []string{}, // Will be populated with hosted URLs
+		introDir:     "final_intros",
+		cacheDir:     "audio_cache",
+		introURLs:    []string{}, // Will be populated with hosted URLs
+		introMixer:   NewIntroMixer(),
+		useNatureMix: audioConfig.UseNatureSounds, // Use config setting
+		timeHelper:   NewUserTimeHelper(),
 	}
 }
 
@@ -30,6 +37,9 @@ func NewAudioManager() *AudioManager {
 // The intro is selected deterministically based on the day to ensure consistency
 // Also returns the voice ID to ensure other tracks use the same voice
 func (am *AudioManager) GetRandomIntroURL(baseURL string) (string, string) {
+	if am.useNatureMix {
+		return am.GetRandomIntroWithNatureURL(baseURL)
+	}
 	// Get the daily voice
 	voiceManager := config.NewVoiceManager()
 	dailyVoice := voiceManager.GetDailyVoice()
@@ -123,6 +133,153 @@ func (am *AudioManager) GetRandomIntroURL(baseURL string) (string, string) {
 
 	// Return intro URL and voice ID to ensure consistency across all tracks
 	return fmt.Sprintf("%s/audio/intros/%s", baseURL, selected), dailyVoice.ID
+}
+
+// GetRandomIntroWithNatureURL returns a URL to an intro mixed with nature sounds
+func (am *AudioManager) GetRandomIntroWithNatureURL(baseURL string) (string, string) {
+	voiceManager := config.NewVoiceManager()
+	dailyVoice := voiceManager.GetDailyVoice()
+
+	natureMixedDir := filepath.Join(am.introDir, "with_nature")
+	if _, err := os.Stat(natureMixedDir); err == nil {
+		// Use pre-mixed versions if available
+		return am.getPreMixedIntroURL(baseURL, dailyVoice, natureMixedDir)
+	}
+
+	return am.GetRandomIntroURL(baseURL)
+}
+
+// getPreMixedIntroURL gets a pre-mixed intro with nature sounds
+func (am *AudioManager) getPreMixedIntroURL(baseURL string, voice config.VoiceProfile, mixedDir string) (string, string) {
+	// All available intro files for all voices (with nature sounds)
+	allIntros := []string{
+		// Amelia (British)
+		"intro_00_Amelia.mp3",
+		"intro_01_Amelia.mp3",
+		"intro_02_Amelia.mp3",
+		"intro_03_Amelia.mp3",
+		"intro_04_Amelia.mp3",
+		"intro_05_Amelia.mp3",
+		"intro_06_Amelia.mp3",
+		"intro_07_Amelia.mp3",
+		// Antoni (American)
+		"intro_00_Antoni.mp3",
+		"intro_01_Antoni.mp3",
+		"intro_02_Antoni.mp3",
+		"intro_03_Antoni.mp3",
+		"intro_04_Antoni.mp3",
+		"intro_05_Antoni.mp3",
+		"intro_06_Antoni.mp3",
+		"intro_07_Antoni.mp3",
+		// Charlotte (Australian)
+		"intro_00_Charlotte.mp3",
+		"intro_01_Charlotte.mp3",
+		"intro_02_Charlotte.mp3",
+		"intro_03_Charlotte.mp3",
+		"intro_04_Charlotte.mp3",
+		"intro_05_Charlotte.mp3",
+		"intro_06_Charlotte.mp3",
+		"intro_07_Charlotte.mp3",
+		// Peter (Irish)
+		"intro_00_Peter.mp3",
+		"intro_01_Peter.mp3",
+		"intro_02_Peter.mp3",
+		"intro_03_Peter.mp3",
+		"intro_04_Peter.mp3",
+		"intro_05_Peter.mp3",
+		"intro_06_Peter.mp3",
+		"intro_07_Peter.mp3",
+		// Drake (Canadian)
+		"intro_00_Drake.mp3",
+		"intro_01_Drake.mp3",
+		"intro_02_Drake.mp3",
+		"intro_03_Drake.mp3",
+		"intro_04_Drake.mp3",
+		"intro_05_Drake.mp3",
+		"intro_06_Drake.mp3",
+		"intro_07_Drake.mp3",
+		// Sally (Southern U.S.)
+		"intro_00_Sally.mp3",
+		"intro_01_Sally.mp3",
+		"intro_02_Sally.mp3",
+		"intro_03_Sally.mp3",
+		"intro_04_Sally.mp3",
+		"intro_05_Sally.mp3",
+		"intro_06_Sally.mp3",
+		"intro_07_Sally.mp3",
+	}
+
+	// Filter intros by voice name
+	var voiceIntros []string
+	for _, intro := range allIntros {
+		if strings.Contains(intro, voice.Name) {
+			voiceIntros = append(voiceIntros, intro)
+		}
+	}
+
+	// If no intros found for this voice, fall back to Antoni
+	if len(voiceIntros) == 0 {
+		fmt.Printf("Warning: No pre-mixed nature intros for voice %s, using Antoni\n", voice.Name)
+		for _, intro := range allIntros {
+			if strings.Contains(intro, "Antoni") {
+				voiceIntros = append(voiceIntros, intro)
+			}
+		}
+	}
+
+	// Select an intro deterministically based on the day
+	now := time.Now()
+	daySeed := now.Year()*10000 + int(now.Month())*100 + now.Day()
+	introIndex := (daySeed * 7) % len(voiceIntros)
+	selected := voiceIntros[introIndex]
+
+	// Return the URL for the nature-mixed intro
+	return fmt.Sprintf("%s/audio/intros/with_nature/%s", baseURL, selected), voice.ID
+}
+
+// IsNatureMixEnabled returns whether nature sound mixing is enabled
+func (am *AudioManager) IsNatureMixEnabled() bool {
+	return am.useNatureMix
+}
+
+// GetRandomIntroWithNatureForTimezone returns an intro URL mixed with nature sounds based on user's timezone
+func (am *AudioManager) GetRandomIntroWithNatureForTimezone(baseURL string, userTimezone string) (string, string) {
+	// Get the daily voice
+	voiceManager := config.NewVoiceManager()
+	dailyVoice := voiceManager.GetDailyVoice()
+
+	// Log the nature sound selection for this user
+	if userTimezone != "" {
+		natureSoundType := am.timeHelper.GetNatureSoundForUserTime(userTimezone)
+		userHour := am.timeHelper.GetUserLocalHour(userTimezone)
+		fmt.Printf("[AUDIO_MANAGER] User timezone: %s, Local hour: %d, Selected nature sound: %s\n",
+			userTimezone, userHour, natureSoundType)
+	}
+
+	// Check if pre-mixed nature intros exist for this timezone
+	if userTimezone != "" {
+		natureMixedDir := filepath.Join(am.introDir, "with_nature", am.getSafeTimezoneDir(userTimezone))
+		if _, err := os.Stat(natureMixedDir); err == nil {
+			// Use pre-mixed versions if available for this timezone
+			return am.getPreMixedIntroURL(baseURL, dailyVoice, natureMixedDir)
+		}
+	}
+
+	// Fall back to general nature-mixed intros
+	natureMixedDir := filepath.Join(am.introDir, "with_nature")
+	if _, err := os.Stat(natureMixedDir); err == nil {
+		return am.getPreMixedIntroURL(baseURL, dailyVoice, natureMixedDir)
+	}
+
+	// Otherwise, fall back to regular intros
+	// In production, you could do real-time mixing here based on timezone
+	return am.GetRandomIntroURL(baseURL)
+}
+
+// getSafeTimezoneDir converts timezone string to safe directory name
+func (am *AudioManager) getSafeTimezoneDir(timezone string) string {
+	// Convert "America/New_York" to "America_New_York"
+	return strings.ReplaceAll(timezone, "/", "_")
 }
 
 // DownloadAndCacheBirdSong downloads bird song from Xeno-canto and caches it
