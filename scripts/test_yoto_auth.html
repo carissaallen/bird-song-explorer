@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Yoto OAuth Test</title>
+    <style>
+        body { font-family: system-ui; padding: 40px; max-width: 800px; margin: 0 auto; }
+        .url { background: #f0f0f0; padding: 10px; border-radius: 5px; word-break: break-all; margin: 10px 0; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .info { background: #e7f3ff; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>Yoto OAuth Authorization Test</h1>
+    
+    <div class="info">
+        <h2>Test Steps:</h2>
+        <ol>
+            <li>Click the button below to open the authorization URL</li>
+            <li>Log in to Yoto if prompted</li>
+            <li>Look for an authorization screen</li>
+            <li>Check if you get redirected after authorizing</li>
+        </ol>
+    </div>
+
+    <h2>Authorization URL:</h2>
+    <div class="url" id="authUrl"></div>
+    
+    <button onclick="testAuth()">Test Authorization</button>
+    
+    <h2>Alternative URLs to try:</h2>
+    <div class="url" id="altUrl1"></div>
+    <div class="url" id="altUrl2"></div>
+
+    <script>
+        const clientId = 'qRdsgw6mmhaTWPvauY1VyE3Mkx64yaHU';
+        const redirectUri = 'https://bird-song-explorer-362662614716.us-central1.run.app/api/v1/yoto/webhook';
+        const state = 'test_' + Date.now();
+        
+        // Standard URL
+        const authUrl = `https://api.yotoplay.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}&scope=offline_access`;
+        
+        // Alternative with login.yotoplay.com
+        const altUrl1 = `https://login.yotoplay.com/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}&scope=offline_access`;
+        
+        // Without scope
+        const altUrl2 = `https://api.yotoplay.com/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}`;
+        
+        document.getElementById('authUrl').textContent = authUrl;
+        document.getElementById('altUrl1').textContent = 'With login.yotoplay.com: ' + altUrl1;
+        document.getElementById('altUrl2').textContent = 'Without scope: ' + altUrl2;
+        
+        function testAuth() {
+            window.open(authUrl, '_blank');
+        }
+    </script>
+    
+    <div class="info" style="margin-top: 40px;">
+        <h3>Debugging Notes:</h3>
+        <ul>
+            <li>If you see "Invalid client" - the client ID is wrong</li>
+            <li>If you see "Invalid redirect URI" - the URI doesn't match</li>
+            <li>If nothing happens after authorize - the app might be in test mode</li>
+            <li>If you get redirected but see "Forbidden" - the token exchange is failing</li>
+        </ul>
+    </div>
+</body>
+</html>

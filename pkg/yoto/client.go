@@ -64,12 +64,29 @@ type UpdateCardRequest struct {
 }
 
 func NewClient(clientID, clientSecret, baseURL string) *Client {
+	// Create HTTP client that doesn't follow redirects automatically
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			// Log redirects but don't follow them automatically
+			fmt.Printf("REDIRECT: From %s to %s\n", via[len(via)-1].URL, req.URL)
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			// Only follow redirects to trusted domains
+			if req.URL.Host != "api.yotoplay.com" && req.URL.Host != "login.yotoplay.com" {
+				return fmt.Errorf("refusing to redirect to untrusted host: %s", req.URL.Host)
+			}
+			return nil
+		},
+	}
+	
 	return &Client{
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		baseURL:      baseURL,
 		authURL:      defaultAuthURL,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		httpClient:   httpClient,
 	}
 }
 

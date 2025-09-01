@@ -60,6 +60,12 @@ func getRandomBookIcon() string {
 
 // UpdateExistingCardContentWithDescriptionAndVoice updates an existing MYO card with new content including bird description and specific voice
 func (cm *ContentManager) UpdateExistingCardContentWithDescriptionAndVoice(cardID string, birdName string, introURL string, birdSongURL string, birdDescription string, voiceID string) error {
+	// For now, call the location-aware version with zero coordinates
+	return cm.UpdateExistingCardContentWithDescriptionVoiceAndLocation(cardID, birdName, introURL, birdSongURL, birdDescription, voiceID, 0, 0)
+}
+
+// UpdateExistingCardContentWithDescriptionVoiceAndLocation updates an existing MYO card with location-aware content
+func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocation(cardID string, birdName string, introURL string, birdSongURL string, birdDescription string, voiceID string, latitude, longitude float64) error {
 	// Voice ID must be provided explicitly
 	if voiceID == "" {
 		return fmt.Errorf("voice ID must be provided explicitly")
@@ -126,7 +132,19 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionAndVoice(cardI
 	var hasDescription bool
 
 	if birdDescription != "" {
-		descriptionData, err := cm.generateBirdDescription(birdDescription, birdName, voiceID)
+		// Use enhanced fact generator if we have location data
+		var descriptionData []byte
+		var err error
+
+		// Keep V4 fact generator disabled to avoid stack overflow
+		// The V4 generator with eBird API integration is available but disabled
+		// until we can properly test it in isolation
+		if false && latitude != 0 && longitude != 0 {
+			descriptionData, err = cm.generateEnhancedBirdDescription(birdDescription, birdName, voiceID, latitude, longitude)
+		} else {
+			descriptionData, err = cm.generateBirdDescription(birdDescription, birdName, voiceID)
+		}
+
 		if err != nil {
 			hasDescription = false
 		} else {
@@ -743,6 +761,15 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 	cm.lastDescriptionText = descriptionText
 
 	return audioData, nil
+}
+
+// generateEnhancedBirdDescription creates location-aware audio narration using V4 fact generator
+// This function is a placeholder that just calls the regular version for now
+// The actual V4 integration is disabled to prevent stack overflow issues
+func (cm *ContentManager) generateEnhancedBirdDescription(description string, birdName string, voiceID string, latitude, longitude float64) ([]byte, error) {
+	// For now, just call the regular version
+	// The V4 fact generator integration is disabled to prevent stack overflow
+	return cm.generateBirdDescription(description, birdName, voiceID)
 }
 
 // extractIntroTextFromURL extracts the intro text from a pre-recorded intro URL
