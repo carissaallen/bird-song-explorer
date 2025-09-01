@@ -3,7 +3,7 @@
 # GCP Cloud Run Deployment Script
 # Prerequisites: gcloud CLI installed and authenticated
 
-PROJECT_ID="your-gcp-project-id"
+PROJECT_ID="yoto-bird-song-explorer"
 REGION="us-central1"
 SERVICE_NAME="bird-song-explorer"
 
@@ -42,7 +42,7 @@ gcloud run deploy $SERVICE_NAME \
   --allow-unauthenticated \
   --port 8080 \
   --memory 512Mi \
-  --set-env-vars="PORT=8080,ENV=production,YOTO_CLIENT_ID=qRdsgw6mmhaTWPvauY1VyE3Mkx64yaHU,YOTO_API_BASE_URL=https://api.yotoplay.com,YOTO_CARD_ID=$YOTO_CARD_ID" \
+  --set-env-vars="ENV=production,YOTO_CLIENT_ID=qRdsgw6mmhaTWPvauY1VyE3Mkx64yaHU,YOTO_API_BASE_URL=https://api.yotoplay.com,YOTO_CARD_ID=$YOTO_CARD_ID" \
   --set-secrets="EBIRD_API_KEY=ebird-api-key:latest,XENOCANTO_API_KEY=xenocanto-api-key:latest,ELEVENLABS_API_KEY=elevenlabs-api-key:latest,YOTO_CLIENT_SECRET=yoto-client-secret:latest,YOTO_ACCESS_TOKEN=yoto-access-token:latest,YOTO_REFRESH_TOKEN=yoto-refresh-token:latest"
 
 # 6. Get the URL
