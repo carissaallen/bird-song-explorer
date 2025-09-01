@@ -20,10 +20,6 @@ if [ -z "$ELEVENLABS_API_KEY" ]; then
     exit 1
 fi
 
-if [ -z "$YOTO_CLIENT_SECRET" ]; then
-    echo "Warning: YOTO_CLIENT_SECRET is not set. Continuing without it..."
-fi
-
 echo "✅ All required API keys found"
 echo "🚀 Starting deployment..."
 

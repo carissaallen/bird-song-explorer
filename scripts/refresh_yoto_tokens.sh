@@ -39,11 +39,7 @@ echo -e "${YELLOW}Refreshing access token...${NC}"
 echo ""
 
 # Refresh the token
-# Build the request - include client_secret only if it exists
 REFRESH_REQUEST="grant_type=refresh_token&client_id=${YOTO_CLIENT_ID}&refresh_token=${YOTO_REFRESH_TOKEN}"
-if [ ! -z "$YOTO_CLIENT_SECRET" ]; then
-    REFRESH_REQUEST="${REFRESH_REQUEST}&client_secret=${YOTO_CLIENT_SECRET}"
-fi
 
 RESPONSE=$(curl -s -X POST "${TOKEN_URL}" \
     -H "Content-Type: application/x-www-form-urlencoded" \

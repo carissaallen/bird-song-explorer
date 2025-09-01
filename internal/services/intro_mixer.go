@@ -67,14 +67,14 @@ func (im *IntroMixer) MixIntroWithNatureSoundsForUser(introData []byte, natureSo
 	if natureSoundType == "" && userTimezone != "" {
 		timeHelper := NewUserTimeHelper()
 		natureSoundType = timeHelper.GetNatureSoundForUserTime(userTimezone)
-		fmt.Printf("[INTRO_MIXER] Selected %s sound based on user's local time in %s\n", 
+		fmt.Printf("[INTRO_MIXER] Selected %s sound based on user's local time in %s\n",
 			natureSoundType, userTimezone)
 	}
-	
+
 	// Fetch nature sound from API
 	var natureSoundData []byte
 	var err error
-	
+
 	if natureSoundType == "" {
 		// Get ambient soundscape based on server time (fallback)
 		natureSoundData, err = im.soundFetcher.GetAmbientSoundscape()
@@ -82,7 +82,7 @@ func (im *IntroMixer) MixIntroWithNatureSoundsForUser(introData []byte, natureSo
 		// Get specific type of nature sound
 		natureSoundData, err = im.soundFetcher.GetNatureSoundByType(natureSoundType)
 	}
-	
+
 	if err != nil {
 		fmt.Printf("[INTRO_MIXER] Failed to fetch nature sounds: %v, returning intro only\n", err)
 		return introData, nil
@@ -100,7 +100,7 @@ func (im *IntroMixer) MixIntroWithNatureSoundsForUser(introData []byte, natureSo
 		return nil, fmt.Errorf("failed to write intro file: %w", err)
 	}
 	defer os.Remove(introFile)
-	
+
 	// Write nature sound data to temp file
 	if err := os.WriteFile(natureFile, natureSoundData, 0644); err != nil {
 		fmt.Printf("[INTRO_MIXER] Failed to write nature sound file: %v\n", err)
@@ -118,48 +118,45 @@ func (im *IntroMixer) MixIntroWithNatureSoundsForUser(introData []byte, natureSo
 	fmt.Printf("[INTRO_MIXER] Intro duration: %.2f seconds\n", introDuration)
 
 	// Calculate timings for short intro
-	leadInTime := 2.0                          // Nature sounds lead-in before voice
-	fadeOutTime := 1.0                         // Fade out duration after voice ends
+	leadInTime := 3.0  // Nature sounds lead-in before voice
+	fadeOutTime := 2.0 // Fade out duration after voice ends
 	totalDuration := leadInTime + introDuration + fadeOutTime
 	fadeOutStart := leadInTime + introDuration // When to start fading out
 
-	fmt.Printf("[INTRO_MIXER] Total mix duration: %.2f seconds (%.1fs lead + %.1fs voice + %.1fs fade)\n", 
-		totalDuration, leadInTime, introDuration, fadeOutTime)
-
 	// Mix audio using ffmpeg with dynamic timing
 	cmd := exec.Command("ffmpeg",
-		"-i", natureFile,     // Input: nature sounds
-		"-i", introFile,      // Input: voice intro
+		"-i", natureFile, // Input: nature sounds
+		"-i", introFile, // Input: voice intro
 		"-filter_complex",
 		fmt.Sprintf(
 			// Nature sounds: fade in at 25% volume for lead-in, then duck to 10% under voice
 			"[0:a]afade=t=in:st=0:d=1.5,volume=0.25[nature_intro];"+
-			"[0:a]volume=0.10[nature_bg];"+
-			// Split nature sounds: lead-in part and background part
-			"[nature_intro]atrim=0:%.1f[nature_start];"+
-			"[nature_bg]atrim=%.1f:%.1f[nature_rest];"+
-			// Delay voice by lead-in time
-			"[1:a]adelay=%d|%d[voice_delayed];"+
-			// Combine nature parts
-			"[nature_start][nature_rest]concat=n=2:v=0:a=1[nature_full];"+
-			// Mix voice with nature, using "first" duration to end when voice ends
-			"[voice_delayed][nature_full]amix=inputs=2:duration=first:dropout_transition=0.5[mixed];"+
-			// Add fade out starting when voice ends
-			"[mixed]afade=t=out:st=%.1f:d=%.1f[out]",
-			leadInTime,               // Trim nature_start to lead-in duration
-			leadInTime,               // Start nature_rest after lead-in
-			totalDuration,            // End nature_rest at total duration
-			int(leadInTime*1000),     // Delay voice (in milliseconds)
-			int(leadInTime*1000),     // Delay voice for second channel
-			fadeOutStart,             // Start fade out when voice ends
-			fadeOutTime,              // Fade out duration
+				"[0:a]volume=0.10[nature_bg];"+
+				// Split nature sounds: lead-in part and background part
+				"[nature_intro]atrim=0:%.1f[nature_start];"+
+				"[nature_bg]atrim=%.1f:%.1f[nature_rest];"+
+				// Delay voice by lead-in time
+				"[1:a]adelay=%d|%d[voice_delayed];"+
+				// Combine nature parts
+				"[nature_start][nature_rest]concat=n=2:v=0:a=1[nature_full];"+
+				// Mix voice with nature, using "first" duration to end when voice ends
+				"[voice_delayed][nature_full]amix=inputs=2:duration=first:dropout_transition=0.5[mixed];"+
+				// Add fade out starting when voice ends
+				"[mixed]afade=t=out:st=%.1f:d=%.1f[out]",
+			leadInTime,           // Trim nature_start to lead-in duration
+			leadInTime,           // Start nature_rest after lead-in
+			totalDuration,        // End nature_rest at total duration
+			int(leadInTime*1000), // Delay voice (in milliseconds)
+			int(leadInTime*1000), // Delay voice for second channel
+			fadeOutStart,         // Start fade out when voice ends
+			fadeOutTime,          // Fade out duration
 		),
 		"-map", "[out]",
 		"-t", fmt.Sprintf("%.2f", totalDuration), // Total duration based on intro length
-		"-c:a", "libmp3lame",                     // MP3 codec
-		"-b:a", "192k",                            // Higher bitrate for intro quality
-		"-ar", "44100",                            // Sample rate
-		"-y",                                      // Overwrite output
+		"-c:a", "libmp3lame", // MP3 codec
+		"-b:a", "192k", // Higher bitrate for intro quality
+		"-ar", "44100", // Sample rate
+		"-y", // Overwrite output
 		outputFile,
 	)
 
@@ -242,7 +239,7 @@ func (im *IntroMixer) getAudioDuration(audioFile string) float64 {
 func (im *IntroMixer) mixWithDefaultTiming(introData []byte, natureSoundType string, userTimezone string) ([]byte, error) {
 	// This is the original mixing logic with fixed 30-second duration
 	// Kept as fallback for systems without ffprobe
-	
+
 	// [Previous mixing logic would go here - simplified for now]
 	// In production, this would contain the original mixing code
 	return introData, nil

@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -29,7 +30,7 @@ type Handler struct {
 func NewHandler(cfg *config.Config) *Handler {
 	yotoClient := yoto.NewClient(
 		cfg.YotoClientID,
-		cfg.YotoClientSecret,
+		"", // No client secret needed for public client
 		cfg.YotoAPIBaseURL,
 	)
 
@@ -322,4 +323,47 @@ func (h *Handler) getIntroFileForVoice(voiceName string) string {
 	}
 
 	return intros[rand.Intn(len(intros))]
+}
+
+// ServeIntroWithNatureSounds serves intro files mixed with nature sounds
+func (h *Handler) ServeIntroWithNatureSounds(c *gin.Context) {
+	filename := c.Param("filename")
+
+	// Log the request
+	log.Printf("[INTRO_HANDLER] Serving intro with nature sounds: %s", filename)
+
+	// Read the original intro file
+	introPath := fmt.Sprintf("./final_intros/%s", filename)
+	introData, err := os.ReadFile(introPath)
+	if err != nil {
+		log.Printf("[INTRO_HANDLER] Failed to read intro file %s: %v", filename, err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Intro file not found"})
+		return
+	}
+
+	// Create intro mixer
+	introMixer := services.NewIntroMixer()
+
+	// Get user timezone from header or use default
+	userTimezone := c.GetHeader("X-User-Timezone")
+
+	// Mix intro with nature sounds
+	log.Printf("[INTRO_HANDLER] Mixing intro with nature sounds for timezone: %s", userTimezone)
+	mixedData, err := introMixer.MixIntroWithNatureSoundsForUser(introData, "", userTimezone)
+	if err != nil {
+		log.Printf("[INTRO_HANDLER] Failed to mix intro with nature sounds: %v", err)
+		// Fall back to serving the original intro
+		c.Data(http.StatusOK, "audio/mpeg", introData)
+		return
+	}
+
+	log.Printf("[INTRO_HANDLER] Successfully mixed intro (original: %d bytes, mixed: %d bytes)",
+		len(introData), len(mixedData))
+
+	// Set appropriate headers for audio streaming
+	c.Header("Content-Type", "audio/mpeg")
+	c.Header("Cache-Control", "public, max-age=3600") // Cache for 1 hour
+
+	// Serve the mixed audio
+	c.Data(http.StatusOK, "audio/mpeg", mixedData)
 }

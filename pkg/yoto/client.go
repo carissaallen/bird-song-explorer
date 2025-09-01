@@ -80,7 +80,7 @@ func NewClient(clientID, clientSecret, baseURL string) *Client {
 			return nil
 		},
 	}
-	
+
 	return &Client{
 		clientID:     clientID,
 		clientSecret: clientSecret,
@@ -191,8 +191,10 @@ func (c *Client) ensureAuthenticated() error {
 	if time.Now().After(c.tokenExpiry.Add(-5 * time.Minute)) {
 		if c.refreshToken != "" {
 			if err := c.refreshAccessToken(); err != nil {
-				if c.accessToken == "" {
-					return err
+				// If refresh fails, try to re-authenticate from environment
+				c.accessToken = "" // Clear the token to force re-authentication
+				if err := c.authenticate(); err != nil {
+					return fmt.Errorf("failed to refresh token and re-authenticate: %w", err)
 				}
 			}
 		}

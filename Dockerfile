@@ -21,6 +21,7 @@ WORKDIR /root/
 COPY --from=builder /app/bird-song-explorer .
 
 COPY final_intros ./final_intros/
+COPY final_outros ./final_outros/
 COPY assets ./assets/
 
 EXPOSE 8080

@@ -33,8 +33,9 @@ voice_tests/
 elevenlabs_intros/
 varied_intros/
 
-# Keep only final intros
+# Keep final audio files
 !final_intros/
+!final_outros/
 
 # Documentation
 *.md

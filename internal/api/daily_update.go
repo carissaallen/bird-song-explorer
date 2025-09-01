@@ -16,7 +16,7 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Recursive call detected"})
 		return
 	}
-	
+
 	schedulerToken := c.GetHeader("X-Scheduler-Token")
 	expectedToken := h.config.SchedulerToken
 
@@ -26,7 +26,7 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 	}
 
 	log.Printf("DailyUpdateHandler: Starting daily update from %s", c.ClientIP())
-	
+
 	// Test external connectivity
 	testResp, err := http.Get("https://httpbin.org/get")
 	if err != nil {
@@ -35,7 +35,7 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		testResp.Body.Close()
 		log.Printf("DailyUpdateHandler: Successfully reached httpbin.org")
 	}
-	
+
 	// Get today's bird for the default location
 	location, _ := h.locationService.GetLocationFromIP("")
 
@@ -69,14 +69,30 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 	}
 
 	log.Printf("DailyUpdateHandler: About to update card %s with bird %s", cardID, bird.CommonName)
-	err = contentManager.UpdateExistingCardContentWithDescriptionAndVoice(
-		cardID,
-		bird.CommonName,
-		introURL,
-		bird.AudioURL,
-		bird.Description,
-		voiceID,
-	)
+	// Pass location coordinates for enhanced facts if available
+	if location != nil && location.Latitude != 0 && location.Longitude != 0 {
+		log.Printf("DailyUpdateHandler: Using location-aware update: %.4f, %.4f", location.Latitude, location.Longitude)
+		err = contentManager.UpdateExistingCardContentWithDescriptionVoiceAndLocation(
+			cardID,
+			bird.CommonName,
+			introURL,
+			bird.AudioURL,
+			bird.Description,
+			voiceID,
+			location.Latitude,
+			location.Longitude,
+		)
+	} else {
+		log.Printf("DailyUpdateHandler: Using standard update (no location)")
+		err = contentManager.UpdateExistingCardContentWithDescriptionAndVoice(
+			cardID,
+			bird.CommonName,
+			introURL,
+			bird.AudioURL,
+			bird.Description,
+			voiceID,
+		)
+	}
 	log.Printf("DailyUpdateHandler: Update completed (or failed)")
 
 	if err != nil {
