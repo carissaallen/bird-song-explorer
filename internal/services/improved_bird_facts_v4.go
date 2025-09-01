@@ -27,7 +27,7 @@ type LocationContext struct {
 	StateName        string
 	NearbyLandmarks  []string
 	RecentSightings  []RecentSighting
-	SeasonalPresence string // "year-round", "summer", "winter", "migration"
+	SeasonalPresence string  // "year-round", "summer", "winter", "migration"
 	Distance         float64 // Distance to nearest sighting in miles
 }
 
@@ -53,86 +53,86 @@ func NewImprovedFactGeneratorV4(ebirdAPIKey string) *ImprovedFactGeneratorV4 {
 func (fg *ImprovedFactGeneratorV4) GenerateExplorersGuideScriptWithLocation(bird *models.Bird, lat, lng float64) string {
 	sections := []string{}
 	usedTransitions := make(map[string]bool)
-	
+
 	// Get Wikipedia data
 	wikiData, _ := fg.wikiClient.GetBirdSummary(bird.CommonName)
-	
+
 	// Get location context from eBird
 	locationContext := fg.getLocationContext(bird, lat, lng)
-	
+
 	// 1. Scientific Introduction
 	scientificIntro := fg.generateScientificIntro(bird)
 	if scientificIntro != "" {
 		sections = append(sections, scientificIntro)
 	}
-	
+
 	// 2. Location-specific introduction (NEW)
 	locationIntro := fg.generateLocationIntro(bird, locationContext)
 	if locationIntro != "" {
 		sections = append(sections, locationIntro)
 	}
-	
+
 	// 3. Physical Description
 	physicalDesc := fg.generateEnhancedPhysicalDescription(bird, wikiData)
 	if physicalDesc != "" {
 		transition := fg.getTransition(0, usedTransitions) // TransitionFact
 		if transition != "" {
-			sections = append(sections, transition + " " + physicalDesc)
+			sections = append(sections, transition+" "+physicalDesc)
 		} else {
 			sections = append(sections, physicalDesc)
 		}
 	}
-	
+
 	// 4. Vocalizations
 	vocalDesc := fg.generateVocalizationDescription(bird, wikiData)
 	if vocalDesc != "" {
 		sections = append(sections, vocalDesc)
 	}
-	
+
 	// 5. Local habitat and behavior (ENHANCED)
 	habitat := fg.generateLocalHabitatBehavior(bird, wikiData, locationContext)
 	if habitat != "" {
 		transition := fg.getTransition(1, usedTransitions) // TransitionAction
-		sections = append(sections, transition + " " + habitat)
+		sections = append(sections, transition+" "+habitat)
 	}
-	
+
 	// 6. Diet and Feeding
 	diet := fg.generateEnhancedDietInfo(bird, wikiData)
 	if diet != "" {
 		sections = append(sections, diet)
 	}
-	
+
 	// 7. Nesting
 	nesting := fg.generateNestingInfo(bird, wikiData)
 	if nesting != "" {
 		transition := fg.getTransition(0, usedTransitions) // TransitionFact
-		sections = append(sections, transition + " " + nesting)
+		sections = append(sections, transition+" "+nesting)
 	}
-	
+
 	// 8. Amazing Abilities
 	abilities := fg.generateAmazingAbilities(bird, wikiData)
 	if abilities != "" {
 		sections = append(sections, abilities)
 	}
-	
+
 	// 9. Recent local sightings (NEW)
 	sightings := fg.generateRecentSightingsInfo(bird, locationContext)
 	if sightings != "" {
 		sections = append(sections, sightings)
 	}
-	
+
 	// 10. Conservation with local action
 	conservation := fg.generateLocalConservationInfo(bird, locationContext)
 	if conservation != "" {
 		sections = append(sections, conservation)
 	}
-	
+
 	// 11. Fun Facts
 	funFacts := fg.generateEnhancedFunFacts(bird, wikiData)
 	if funFacts != "" {
 		sections = append(sections, funFacts)
 	}
-	
+
 	// Join sections with natural flow
 	return fg.joinSectionsNaturally(sections, bird.CommonName, locationContext)
 }
@@ -143,38 +143,38 @@ func (fg *ImprovedFactGeneratorV4) getLocationContext(bird *models.Bird, lat, ln
 		CityName:  fg.getCityFromCoordinates(lat, lng),
 		StateName: fg.getStateFromCoordinates(lat, lng),
 	}
-	
+
 	// Get recent observations from eBird (last 30 days)
 	observations, err := fg.ebirdClient.GetRecentObservations(lat, lng, 30)
 	if err == nil {
 		// Filter for this specific bird
 		for _, obs := range observations {
 			if strings.EqualFold(obs.CommonName, bird.CommonName) ||
-			   strings.EqualFold(obs.ScientificName, bird.ScientificName) {
-				
+				strings.EqualFold(obs.ScientificName, bird.ScientificName) {
+
 				obsDate, _ := time.Parse("2006-01-02", obs.ObsDate)
 				daysAgo := int(time.Since(obsDate).Hours() / 24)
-				
+
 				sighting := RecentSighting{
 					LocationName: obs.LocationName,
 					Date:         obs.ObsDate,
 					Count:        obs.HowMany,
 					DaysAgo:      daysAgo,
 				}
-				
+
 				context.RecentSightings = append(context.RecentSightings, sighting)
-				
+
 				// Calculate distance to nearest sighting
 				if context.Distance == 0 || context.Distance > fg.calculateDistance(lat, lng, obs.Latitude, obs.Longitude) {
 					context.Distance = fg.calculateDistance(lat, lng, obs.Latitude, obs.Longitude)
 				}
 			}
 		}
-		
+
 		// Determine seasonal presence based on observations
 		context.SeasonalPresence = fg.determineSeasonalPresence(context.RecentSightings)
 	}
-	
+
 	return context
 }
 
@@ -183,36 +183,36 @@ func (fg *ImprovedFactGeneratorV4) generateLocationIntro(bird *models.Bird, cont
 	if len(context.RecentSightings) == 0 {
 		return ""
 	}
-	
+
 	mostRecent := context.RecentSightings[0]
-	
+
 	intros := []string{
 		fmt.Sprintf("Great news! %ss have been spotted near you in %s!", bird.CommonName, context.CityName),
 		fmt.Sprintf("You're in luck! A %s was seen just %d days ago at %s!", bird.CommonName, mostRecent.DaysAgo, mostRecent.LocationName),
 		fmt.Sprintf("Exciting! %ss are active in your area - one was spotted at %s recently!", bird.CommonName, mostRecent.LocationName),
 		fmt.Sprintf("Perfect timing! %ss have been seen %d times near %s this month!", bird.CommonName, len(context.RecentSightings), context.CityName),
 	}
-	
+
 	if context.Distance < 5 {
 		intros = append(intros, fmt.Sprintf("Wow! A %s was spotted less than %.1f miles from you!", bird.CommonName, context.Distance))
 	}
-	
+
 	return intros[fg.rng.Intn(len(intros))]
 }
 
 // generateLocalHabitatBehavior creates habitat info with local context
 func (fg *ImprovedFactGeneratorV4) generateLocalHabitatBehavior(bird *models.Bird, wikiData *wikipedia.PageSummary, context LocationContext) string {
 	baseHabitat := fg.generateEnhancedHabitatBehavior(bird, wikiData)
-	
+
 	// Add local context
 	if len(context.RecentSightings) > 0 {
 		localTips := []string{}
-		
+
 		// Analyze where birds have been seen locally
 		parkCount := 0
 		waterCount := 0
 		urbanCount := 0
-		
+
 		for _, sighting := range context.RecentSightings {
 			lower := strings.ToLower(sighting.LocationName)
 			if strings.Contains(lower, "park") || strings.Contains(lower, "trail") {
@@ -225,7 +225,7 @@ func (fg *ImprovedFactGeneratorV4) generateLocalHabitatBehavior(bird *models.Bir
 				urbanCount++
 			}
 		}
-		
+
 		if parkCount > len(context.RecentSightings)/2 {
 			localTips = append(localTips, fmt.Sprintf("In %s, check local parks and nature trails!", context.CityName))
 		}
@@ -235,12 +235,12 @@ func (fg *ImprovedFactGeneratorV4) generateLocalHabitatBehavior(bird *models.Bir
 		if urbanCount > 0 {
 			localTips = append(localTips, "You might even see them in backyards and gardens nearby!")
 		}
-		
+
 		if len(localTips) > 0 {
 			baseHabitat += " " + localTips[fg.rng.Intn(len(localTips))]
 		}
 	}
-	
+
 	// Add seasonal context
 	if context.SeasonalPresence != "" {
 		switch context.SeasonalPresence {
@@ -254,7 +254,7 @@ func (fg *ImprovedFactGeneratorV4) generateLocalHabitatBehavior(bird *models.Bir
 			baseHabitat += fmt.Sprintf(" They pass through %s during migration!", context.StateName)
 		}
 	}
-	
+
 	return baseHabitat
 }
 
@@ -263,11 +263,11 @@ func (fg *ImprovedFactGeneratorV4) generateRecentSightingsInfo(bird *models.Bird
 	if len(context.RecentSightings) == 0 {
 		return ""
 	}
-	
+
 	// Group sightings by how recent
 	thisWeek := 0
 	thisMonth := 0
-	
+
 	for _, sighting := range context.RecentSightings {
 		if sighting.DaysAgo <= 7 {
 			thisWeek++
@@ -276,19 +276,19 @@ func (fg *ImprovedFactGeneratorV4) generateRecentSightingsInfo(bird *models.Bird
 			thisMonth++
 		}
 	}
-	
+
 	sightingPhrases := []string{}
-	
+
 	if thisWeek > 0 {
-		sightingPhrases = append(sightingPhrases, 
+		sightingPhrases = append(sightingPhrases,
 			fmt.Sprintf("Bird watchers saw %d %ss near you just this week!", thisWeek, bird.CommonName))
 	}
-	
+
 	if len(context.RecentSightings) > 5 {
 		sightingPhrases = append(sightingPhrases,
 			fmt.Sprintf("Wow! %ss have been spotted %d times in your area this month!", bird.CommonName, thisMonth))
 	}
-	
+
 	// Mention specific interesting locations
 	for _, sighting := range context.RecentSightings[:min(3, len(context.RecentSightings))] {
 		if sighting.Count > 1 {
@@ -297,18 +297,18 @@ func (fg *ImprovedFactGeneratorV4) generateRecentSightingsInfo(bird *models.Bird
 			break
 		}
 	}
-	
+
 	if len(sightingPhrases) > 0 {
 		return "Local bird alert! " + sightingPhrases[fg.rng.Intn(len(sightingPhrases))]
 	}
-	
+
 	return ""
 }
 
 // generateLocalConservationInfo creates conservation info with local actions
 func (fg *ImprovedFactGeneratorV4) generateLocalConservationInfo(bird *models.Bird, context LocationContext) string {
 	base := fg.generateConservationInfo(bird)
-	
+
 	// Add local conservation actions
 	localActions := []string{
 		fmt.Sprintf("Join the %s Audubon Society to help protect %ss!", context.StateName, bird.CommonName),
@@ -316,11 +316,11 @@ func (fg *ImprovedFactGeneratorV4) generateLocalConservationInfo(bird *models.Bi
 		fmt.Sprintf("Participate in the %s Bird Count to track local populations!", context.CityName),
 		"Create a bird-friendly yard with native plants and fresh water!",
 	}
-	
+
 	if strings.Contains(base, "help") {
 		base += " " + localActions[fg.rng.Intn(len(localActions))]
 	}
-	
+
 	return base
 }
 
@@ -341,16 +341,16 @@ func (fg *ImprovedFactGeneratorV4) getStateFromCoordinates(lat, lng float64) str
 func (fg *ImprovedFactGeneratorV4) calculateDistance(lat1, lng1, lat2, lng2 float64) float64 {
 	// Haversine formula for distance between two points
 	const earthRadius = 3959.0 // miles
-	
+
 	dLat := (lat2 - lat1) * math.Pi / 180
 	dLng := (lng2 - lng1) * math.Pi / 180
-	
+
 	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
 		math.Cos(lat1*math.Pi/180)*math.Cos(lat2*math.Pi/180)*
-		math.Sin(dLng/2)*math.Sin(dLng/2)
-	
+			math.Sin(dLng/2)*math.Sin(dLng/2)
+
 	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-	
+
 	return earthRadius * c
 }
 
@@ -358,15 +358,15 @@ func (fg *ImprovedFactGeneratorV4) determineSeasonalPresence(sightings []RecentS
 	if len(sightings) == 0 {
 		return ""
 	}
-	
+
 	// Analyze sighting patterns
 	// This is simplified - a real implementation would look at historical data
 	currentMonth := time.Now().Month()
-	
+
 	if len(sightings) > 10 {
 		return "year-round"
 	}
-	
+
 	switch currentMonth {
 	case time.June, time.July, time.August:
 		return "summer"
@@ -389,13 +389,13 @@ func min(a, b int) int {
 // joinSectionsNaturally combines sections with location-aware closing
 func (fg *ImprovedFactGeneratorV4) joinSectionsNaturally(sections []string, birdName string, context LocationContext) string {
 	if len(sections) == 0 {
-		return fmt.Sprintf("The %s is an incredible bird! Listen for its unique song and watch for it in %s.", 
+		return fmt.Sprintf("The %s is an incredible bird! Listen for its unique song and watch for it in %s.",
 			birdName, context.CityName)
 	}
-	
+
 	result := strings.Join(sections, " ")
 	result = strings.ReplaceAll(result, "  ", " ")
-	
+
 	// Location-aware closings
 	closings := []string{
 		fmt.Sprintf(" Now you're a %s expert! Look for one in %s today!", birdName, context.CityName),
@@ -403,17 +403,17 @@ func (fg *ImprovedFactGeneratorV4) joinSectionsNaturally(sections []string, bird
 		fmt.Sprintf(" The %s is waiting to be discovered in %s! Happy bird watching!", birdName, context.CityName),
 		fmt.Sprintf(" Now go explore %s and find a %s!", context.CityName, birdName),
 	}
-	
+
 	if len(context.RecentSightings) > 0 {
-		closings = append(closings, 
-			fmt.Sprintf(" With %d recent sightings near you, today might be your lucky day to see a %s!", 
+		closings = append(closings,
+			fmt.Sprintf(" With %d recent sightings near you, today might be your lucky day to see a %s!",
 				len(context.RecentSightings), birdName))
 	}
-	
+
 	if len(result) < 1500 {
 		result += closings[fg.rng.Intn(len(closings))]
 	}
-	
+
 	return result
 }
 
@@ -439,7 +439,7 @@ func (fg *ImprovedFactGeneratorV4) getTransition(transType int, usedTransitions 
 			"Pay attention to this:",
 		},
 	}
-	
+
 	options := transitions[transType]
 	for attempts := 0; attempts < 10; attempts++ {
 		choice := options[fg.rng.Intn(len(options))]
@@ -448,20 +448,32 @@ func (fg *ImprovedFactGeneratorV4) getTransition(transType int, usedTransitions 
 			return choice
 		}
 	}
-	
+
 	return options[fg.rng.Intn(len(options))]
 }
 
 // Include other essential methods from V3
 func (fg *ImprovedFactGeneratorV4) generateScientificIntro(bird *models.Bird) string {
-	intros := []string{
-		fmt.Sprintf("Let me tell you about the amazing %s! Its scientific name is %s.", bird.CommonName, bird.ScientificName),
-		fmt.Sprintf("Today we're learning about the %s! Scientists call it %s.", bird.CommonName, bird.ScientificName),
-		fmt.Sprintf("Get ready to discover the %s! Its scientific name is %s.", bird.CommonName, bird.ScientificName),
+	var intro string
+
+	// Only include scientific name if it's available
+	if bird.ScientificName != "" {
+		intros := []string{
+			fmt.Sprintf("Let me tell you about the amazing %s! Its scientific name is %s.", bird.CommonName, bird.ScientificName),
+			fmt.Sprintf("Today we're learning about the %s! Scientists call it %s.", bird.CommonName, bird.ScientificName),
+			fmt.Sprintf("Get ready to discover the %s! Its scientific name is %s.", bird.CommonName, bird.ScientificName),
+		}
+		intro = intros[fg.rng.Intn(len(intros))]
+	} else {
+		// If no scientific name, use a simpler introduction
+		intros := []string{
+			fmt.Sprintf("Let me tell you about the amazing %s!", bird.CommonName),
+			fmt.Sprintf("Today we're learning about the %s!", bird.CommonName),
+			fmt.Sprintf("Get ready to discover the %s!", bird.CommonName),
+		}
+		intro = intros[fg.rng.Intn(len(intros))]
 	}
-	
-	intro := intros[fg.rng.Intn(len(intros))]
-	
+
 	if bird.Family != "" {
 		familyName := bird.Family
 		if strings.HasSuffix(familyName, "idae") {
@@ -469,7 +481,7 @@ func (fg *ImprovedFactGeneratorV4) generateScientificIntro(bird *models.Bird) st
 			intro += fmt.Sprintf(" It belongs to the %s family of birds.", familyName)
 		}
 	}
-	
+
 	return intro
 }
 
@@ -482,38 +494,38 @@ func (fg *ImprovedFactGeneratorV4) generateEnhancedPhysicalDescription(bird *mod
 	if wikiData == nil {
 		return fmt.Sprintf("The %s has unique markings and colors that make it special.", bird.CommonName)
 	}
-	
+
 	combinedText := wikiData.Extract
 	sentences := strings.Split(combinedText, ". ")
-	
+
 	var physicalFacts []string
 	usedSentences := make(map[string]bool)
-	
+
 	for _, sentence := range sentences {
 		sentence = strings.TrimSpace(sentence)
 		lower := strings.ToLower(sentence)
-		
+
 		if usedSentences[lower] {
 			continue
 		}
-		
+
 		if (strings.Contains(lower, "color") || strings.Contains(lower, "size") ||
 			strings.Contains(lower, "wing") || strings.Contains(lower, "marking")) &&
 			!strings.Contains(lower, "genus") && len(sentence) < 200 {
-			
+
 			physicalFacts = append(physicalFacts, sentence)
 			usedSentences[lower] = true
-			
+
 			if len(physicalFacts) >= 2 {
 				break
 			}
 		}
 	}
-	
+
 	if len(physicalFacts) > 0 {
 		return strings.Join(physicalFacts, " ")
 	}
-	
+
 	return fmt.Sprintf("The %s has unique markings and colors that make it special.", bird.CommonName)
 }
 
@@ -525,15 +537,15 @@ func (fg *ImprovedFactGeneratorV4) generateVocalizationDescription(bird *models.
 		"Their voice is special! ",
 		"You can identify them by their call! ",
 	}
-	
+
 	intro := soundIntros[fg.rng.Intn(len(soundIntros))]
-	
+
 	if strings.Contains(lowerName, "robin") {
 		return intro + "Robins sing a cheerful melody that sounds like 'cheerily, cheer-up, cheerio!'"
 	} else if strings.Contains(lowerName, "cardinal") {
 		return intro + "Cardinals whistle clear notes like 'birdy-birdy-birdy' or 'cheer-cheer-cheer.'"
 	}
-	
+
 	return ""
 }
 
