@@ -19,6 +19,8 @@ type ContentManager struct {
 	lastIntroText        string // Store intro text for transitions (see: 'previous_track')
 	lastAnnouncementText string // Store announcement text for transitions (see: 'previous_track')
 	lastDescriptionText  string // Store description text for transitions (see: 'previous_track')
+	selectedAmbience     string // Store which ambience was used in intro for Track 2
+	ambienceData         []byte // Store ambience audio data for Track 2
 }
 
 type CreateContentResponse struct {

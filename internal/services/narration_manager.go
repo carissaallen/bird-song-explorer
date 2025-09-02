@@ -146,7 +146,7 @@ func (nm *NarrationManager) generateAudio(text string, voice VoiceConfig) ([]byt
 			"stability":        0.75,
 			"similarity_boost": 0.75,
 			"style":            0.5,
-			"speed":            0.95, // Slightly slower speed for kids (95% of normal)
+			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
 	}
 

@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -83,6 +84,9 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 
 	// Extract intro text from the URL if it's a pre-recorded intro
 	cm.extractIntroTextFromURL(introURL)
+	
+	// Check if this is an enhanced intro and capture ambience data
+	cm.captureAmbienceFromEnhancedIntro(introURL)
 
 	introSha, introInfo, err := cm.uploader.UploadAudioFromURL(introURL, "Bird Song Explorer Intro")
 	if err != nil {
@@ -535,7 +539,27 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 		return nil, fmt.Errorf("voice ID is required for announcement generation")
 	}
 
-	announcement := fmt.Sprintf("Today's bird is the %s! Listen carefully to its unique song.", birdName)
+	// Check if we have ambience data from Track 1 (enhanced intro)
+	if cm.selectedAmbience != "" && len(cm.ambienceData) > 0 {
+		// Use enhanced announcement with continuing ambience
+		enhancedAnnouncement := services.NewEnhancedBirdAnnouncement(elevenLabsKey)
+		announcementData, err := enhancedAnnouncement.GenerateAnnouncementFromAudioData(
+			birdName,
+			voiceID,
+			cm.ambienceData,
+		)
+		if err == nil {
+			// Store the announcement text for transitions
+			cm.lastAnnouncementText = fmt.Sprintf("Today's bird is the %s! . . . Listen carefully to its unique song.", birdName)
+			return announcementData, nil
+		}
+		// Fall through to standard generation if enhanced fails
+	}
+
+	// Add pauses between sentences using spaced periods and em dash
+	// ElevenLabs responds better to punctuation than line breaks
+	// Spaced periods (. . .) create a longer pause for emphasis
+	announcement := fmt.Sprintf("Today's bird is the %s! . . . Listen carefully to its unique song.", birdName)
 
 	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
@@ -546,7 +570,7 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 		"voice_settings": map[string]interface{}{
 			"stability":        0.5,
 			"similarity_boost": 0.5,
-			"speed":            0.95, // Slightly slower speed for kids (95% of normal)
+			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
 		"previous_text": cm.lastIntroText,
 	}
@@ -622,7 +646,7 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 		"voice_settings": map[string]interface{}{
 			"stability":         0.6,
 			"similarity_boost":  0.6,
-			"speed":             0.92, // Slightly slower for goodbye message
+			"speed":             0.88, // Even slower for goodbye message
 			"style":             0.3,  // Add some style/emotion
 			"use_speaker_boost": true, // Enhance voice clarity
 		},
@@ -702,7 +726,9 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		return nil, fmt.Errorf("voice ID is required for description generation")
 	}
 
-	descriptionText := fmt.Sprintf("Did you know? %s Isn't that amazing? Nature is full of wonderful surprises!", description)
+	// Add pauses between sentences for better cadence
+	// Use spaced periods and em dash for effective pausing
+	descriptionText := fmt.Sprintf("Did you know? . . . %s . . . Isn't that amazing? — Nature is full of wonderful surprises!", description)
 
 	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
@@ -713,7 +739,7 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		"voice_settings": map[string]interface{}{
 			"stability":        0.6,
 			"similarity_boost": 0.6,
-			"speed":            0.95, // Slightly slower speed for kids (95% of normal)
+			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
 		// Add previous_text from Track 2 (announcement) for smooth transition
 		"previous_text": cm.lastAnnouncementText,
@@ -878,4 +904,43 @@ func (cm *ContentManager) extractIntroTextFromURL(introURL string) {
 
 	// If not a pre-recorded intro or pattern not found, use a default
 	cm.lastIntroText = "Welcome to Bird Song Explorer!"
+}
+
+// captureAmbienceFromEnhancedIntro checks if the intro is enhanced and captures ambience data
+func (cm *ContentManager) captureAmbienceFromEnhancedIntro(introURL string) {
+	// Check if this is an enhanced intro (from cache)
+	if !strings.Contains(introURL, "/audio/cache/enhanced_intros/") {
+		// Not an enhanced intro, clear ambience data
+		cm.selectedAmbience = ""
+		cm.ambienceData = nil
+		return
+	}
+
+	// Try to get the ambience data from the audio manager
+	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
+	if elevenLabsKey == "" {
+		return
+	}
+
+	// Create an enhanced intro mixer to get ambience info
+	mixer := services.NewEnhancedIntroMixer(elevenLabsKey)
+	
+	// Determine which ambience was selected based on the day (same logic as intro generation)
+	ambiences := mixer.GetAvailableAmbiences()
+	now := time.Now()
+	daySeed := now.Year()*10000 + int(now.Month())*100 + now.Day()
+	selectedAmbienceIdx := daySeed % len(ambiences)
+	
+	if selectedAmbienceIdx < len(ambiences) {
+		selectedAmbience := ambiences[selectedAmbienceIdx]
+		cm.selectedAmbience = selectedAmbience.Name
+		
+		// Try to read the ambience file
+		ambiencePath := filepath.Join("sound_effects", selectedAmbience.Path)
+		if data, err := os.ReadFile(ambiencePath); err == nil {
+			cm.ambienceData = data
+			fmt.Printf("[CONTENT_UPDATE] Captured %s ambience for Track 2 (%d bytes)\n", 
+				cm.selectedAmbience, len(cm.ambienceData))
+		}
+	}
 }

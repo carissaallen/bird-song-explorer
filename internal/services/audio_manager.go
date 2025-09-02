@@ -13,16 +13,22 @@ import (
 )
 
 type AudioManager struct {
-	introDir  string
-	cacheDir  string
-	introURLs []string // URLs where intros are hosted
+	introDir         string
+	cacheDir         string
+	introURLs        []string // URLs where intros are hosted
+	enhancedMixer    *EnhancedIntroMixer
+	elevenLabsKey    string
 }
 
 func NewAudioManager() *AudioManager {
+	// Get ElevenLabs API key from environment
+	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
 	return &AudioManager{
-		introDir:  "final_intros",
-		cacheDir:  "audio_cache",
-		introURLs: []string{}, // Will be populated with hosted URLs
+		introDir:      "final_intros",
+		cacheDir:      "audio_cache",
+		introURLs:     []string{}, // Will be populated with hosted URLs
+		enhancedMixer: NewEnhancedIntroMixer(elevenLabsKey),
+		elevenLabsKey: elevenLabsKey,
 	}
 }
 
@@ -34,63 +40,44 @@ func (am *AudioManager) GetRandomIntroURL(baseURL string) (string, string) {
 	voiceManager := config.NewVoiceManager()
 	dailyVoice := voiceManager.GetDailyVoice()
 
+	// Check if we should use enhanced intro (with local sound effects)
+	if am.shouldUseEnhancedIntro() {
+		return am.getEnhancedIntroURL(baseURL, dailyVoice.ID)
+	}
+
 	// All available intro files for all voices
 	// These should match the voices defined in config/voices.go
 	allIntros := []string{
 		// Amelia (British)
-		"intro_00_Amelia.mp3",
-		"intro_01_Amelia.mp3",
-		"intro_02_Amelia.mp3",
-		"intro_03_Amelia.mp3",
-		"intro_04_Amelia.mp3",
-		"intro_05_Amelia.mp3",
-		"intro_06_Amelia.mp3",
-		"intro_07_Amelia.mp3",
+		"intro_00_Amelia.mp3", "intro_01_Amelia.mp3", "intro_02_Amelia.mp3", "intro_03_Amelia.mp3",
+		"intro_04_Amelia.mp3", "intro_05_Amelia.mp3", "intro_06_Amelia.mp3", "intro_07_Amelia.mp3",
 		// Antoni (American)
-		"intro_00_Antoni.mp3",
-		"intro_01_Antoni.mp3",
-		"intro_02_Antoni.mp3",
-		"intro_03_Antoni.mp3",
-		"intro_04_Antoni.mp3",
-		"intro_05_Antoni.mp3",
-		"intro_06_Antoni.mp3",
-		"intro_07_Antoni.mp3",
+		"intro_00_Antoni.mp3", "intro_01_Antoni.mp3", "intro_02_Antoni.mp3", "intro_03_Antoni.mp3",
+		"intro_04_Antoni.mp3", "intro_05_Antoni.mp3", "intro_06_Antoni.mp3", "intro_07_Antoni.mp3",
 		// Charlotte (Australian)
-		"intro_00_Charlotte.mp3",
-		"intro_01_Charlotte.mp3",
-		"intro_02_Charlotte.mp3",
-		"intro_03_Charlotte.mp3",
-		"intro_04_Charlotte.mp3",
-		"intro_05_Charlotte.mp3",
-		"intro_06_Charlotte.mp3",
-		"intro_07_Charlotte.mp3",
-		// Peter (Irish)
-		"intro_00_Peter.mp3",
-		"intro_01_Peter.mp3",
-		"intro_02_Peter.mp3",
-		"intro_03_Peter.mp3",
-		"intro_04_Peter.mp3",
-		"intro_05_Peter.mp3",
-		"intro_06_Peter.mp3",
-		"intro_07_Peter.mp3",
+		"intro_00_Charlotte.mp3", "intro_01_Charlotte.mp3", "intro_02_Charlotte.mp3", "intro_03_Charlotte.mp3",
+		"intro_04_Charlotte.mp3", "intro_05_Charlotte.mp3", "intro_06_Charlotte.mp3", "intro_07_Charlotte.mp3",
+		// Danielle
+		"intro_00_Danielle.mp3", "intro_01_Danielle.mp3", "intro_02_Danielle.mp3", "intro_03_Danielle.mp3",
+		"intro_04_Danielle.mp3", "intro_05_Danielle.mp3", "intro_06_Danielle.mp3", "intro_07_Danielle.mp3",
 		// Drake (Canadian)
-		"intro_00_Drake.mp3",
-		"intro_01_Drake.mp3",
-		"intro_02_Drake.mp3",
-		"intro_03_Drake.mp3",
-		"intro_04_Drake.mp3",
-		"intro_05_Drake.mp3",
-		"intro_06_Drake.mp3",
-		"intro_07_Drake.mp3",
+		"intro_00_Drake.mp3", "intro_01_Drake.mp3", "intro_02_Drake.mp3", "intro_03_Drake.mp3",
+		"intro_04_Drake.mp3", "intro_05_Drake.mp3", "intro_06_Drake.mp3", "intro_07_Drake.mp3",
+		// Hope
+		"intro_00_Hope.mp3", "intro_01_Hope.mp3", "intro_02_Hope.mp3", "intro_03_Hope.mp3",
+		"intro_04_Hope.mp3", "intro_05_Hope.mp3", "intro_06_Hope.mp3", "intro_07_Hope.mp3",
+		// Peter (Irish)
+		"intro_00_Peter.mp3", "intro_01_Peter.mp3", "intro_02_Peter.mp3", "intro_03_Peter.mp3",
+		"intro_04_Peter.mp3", "intro_05_Peter.mp3", "intro_06_Peter.mp3", "intro_07_Peter.mp3",
+		// Rory
+		"intro_00_Rory.mp3", "intro_01_Rory.mp3", "intro_02_Rory.mp3", "intro_03_Rory.mp3",
+		"intro_04_Rory.mp3", "intro_05_Rory.mp3", "intro_06_Rory.mp3", "intro_07_Rory.mp3",
 		// Sally (Southern U.S.)
-		"intro_00_Sally.mp3",
-		"intro_01_Sally.mp3",
-		"intro_02_Sally.mp3",
-		"intro_03_Sally.mp3",
-		"intro_04_Sally.mp3",
-		"intro_05_Sally.mp3",
-		"intro_06_Sally.mp3",
-		"intro_07_Sally.mp3",
+		"intro_00_Sally.mp3", "intro_01_Sally.mp3", "intro_02_Sally.mp3", "intro_03_Sally.mp3",
+		"intro_04_Sally.mp3", "intro_05_Sally.mp3", "intro_06_Sally.mp3", "intro_07_Sally.mp3",
+		// Stuart
+		"intro_00_Stuart.mp3", "intro_01_Stuart.mp3", "intro_02_Stuart.mp3", "intro_03_Stuart.mp3",
+		"intro_04_Stuart.mp3", "intro_05_Stuart.mp3", "intro_06_Stuart.mp3", "intro_07_Stuart.mp3",
 	}
 
 	// Filter intros by voice name
@@ -123,6 +110,133 @@ func (am *AudioManager) GetRandomIntroURL(baseURL string) (string, string) {
 
 	// Return intro URL and voice ID to ensure consistency across all tracks
 	return fmt.Sprintf("%s/audio/intros/%s", baseURL, selected), dailyVoice.ID
+}
+
+// shouldUseEnhancedIntro checks if we should use the enhanced intro with local sound effects
+func (am *AudioManager) shouldUseEnhancedIntro() bool {
+	// Check if sound_effects directory exists
+	if _, err := os.Stat("sound_effects"); err != nil {
+		return false
+	}
+	// Check if we have the required sound files
+	requiredFiles := []string{
+		"sound_effects/ambience/forest-ambience.mp3",
+		"sound_effects/ambience/jungle_sounds.mp3",
+		"sound_effects/ambience/morning-birdsong.mp3",
+		"sound_effects/chimes/sparkle_chime.mp3",
+	}
+	for _, file := range requiredFiles {
+		if _, err := os.Stat(file); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// getEnhancedIntroURL generates and caches an enhanced intro, returning its URL
+func (am *AudioManager) getEnhancedIntroURL(baseURL string, voiceID string) (string, string) {
+	// Generate cache key based on date and voice
+	now := time.Now()
+	dateStr := now.Format("2006-01-02")
+	cacheKey := fmt.Sprintf("enhanced_intro_%s_%s", dateStr, voiceID)
+	cachePath := filepath.Join(am.cacheDir, "enhanced_intros", cacheKey+".mp3")
+
+	// Check if we have a cached version
+	if _, err := os.Stat(cachePath); err == nil {
+		// Return cached URL
+		return fmt.Sprintf("%s/audio/cache/enhanced_intros/%s.mp3", baseURL, cacheKey), voiceID
+	}
+
+	// Generate new enhanced intro
+	introManager := NewIntroManager()
+	introText := introManager.GetRandomIntro()
+	
+	introData, err := am.enhancedMixer.GenerateEnhancedIntroWithText(introText, voiceID)
+	if err != nil {
+		fmt.Printf("Failed to generate enhanced intro: %v, falling back to standard\n", err)
+		// Fall back to standard intro
+		return am.getStandardIntroURL(baseURL, voiceID)
+	}
+
+	// Ensure cache directory exists
+	os.MkdirAll(filepath.Dir(cachePath), 0755)
+
+	// Save to cache
+	if err := os.WriteFile(cachePath, introData, 0644); err != nil {
+		fmt.Printf("Failed to cache enhanced intro: %v\n", err)
+	}
+
+	return fmt.Sprintf("%s/audio/cache/enhanced_intros/%s.mp3", baseURL, cacheKey), voiceID
+}
+
+// getStandardIntroURL returns a standard pre-recorded intro URL (fallback)
+func (am *AudioManager) getStandardIntroURL(baseURL string, voiceID string) (string, string) {
+	voiceManager := config.NewVoiceManager()
+	dailyVoice := voiceManager.GetDailyVoice()
+
+	// All available intro files for all voices (8 intros per voice)
+	allIntros := []string{
+		// Amelia (British)
+		"intro_00_Amelia.mp3", "intro_01_Amelia.mp3", "intro_02_Amelia.mp3", "intro_03_Amelia.mp3",
+		"intro_04_Amelia.mp3", "intro_05_Amelia.mp3", "intro_06_Amelia.mp3", "intro_07_Amelia.mp3",
+		// Antoni (American)
+		"intro_00_Antoni.mp3", "intro_01_Antoni.mp3", "intro_02_Antoni.mp3", "intro_03_Antoni.mp3",
+		"intro_04_Antoni.mp3", "intro_05_Antoni.mp3", "intro_06_Antoni.mp3", "intro_07_Antoni.mp3",
+		// Charlotte (Australian)
+		"intro_00_Charlotte.mp3", "intro_01_Charlotte.mp3", "intro_02_Charlotte.mp3", "intro_03_Charlotte.mp3",
+		"intro_04_Charlotte.mp3", "intro_05_Charlotte.mp3", "intro_06_Charlotte.mp3", "intro_07_Charlotte.mp3",
+		// Danielle
+		"intro_00_Danielle.mp3", "intro_01_Danielle.mp3", "intro_02_Danielle.mp3", "intro_03_Danielle.mp3",
+		"intro_04_Danielle.mp3", "intro_05_Danielle.mp3", "intro_06_Danielle.mp3", "intro_07_Danielle.mp3",
+		// Drake (Canadian)
+		"intro_00_Drake.mp3", "intro_01_Drake.mp3", "intro_02_Drake.mp3", "intro_03_Drake.mp3",
+		"intro_04_Drake.mp3", "intro_05_Drake.mp3", "intro_06_Drake.mp3", "intro_07_Drake.mp3",
+		// Hope
+		"intro_00_Hope.mp3", "intro_01_Hope.mp3", "intro_02_Hope.mp3", "intro_03_Hope.mp3",
+		"intro_04_Hope.mp3", "intro_05_Hope.mp3", "intro_06_Hope.mp3", "intro_07_Hope.mp3",
+		// Peter (Irish)
+		"intro_00_Peter.mp3", "intro_01_Peter.mp3", "intro_02_Peter.mp3", "intro_03_Peter.mp3",
+		"intro_04_Peter.mp3", "intro_05_Peter.mp3", "intro_06_Peter.mp3", "intro_07_Peter.mp3",
+		// Rory
+		"intro_00_Rory.mp3", "intro_01_Rory.mp3", "intro_02_Rory.mp3", "intro_03_Rory.mp3",
+		"intro_04_Rory.mp3", "intro_05_Rory.mp3", "intro_06_Rory.mp3", "intro_07_Rory.mp3",
+		// Sally (Southern U.S.)
+		"intro_00_Sally.mp3", "intro_01_Sally.mp3", "intro_02_Sally.mp3", "intro_03_Sally.mp3",
+		"intro_04_Sally.mp3", "intro_05_Sally.mp3", "intro_06_Sally.mp3", "intro_07_Sally.mp3",
+		// Stuart
+		"intro_00_Stuart.mp3", "intro_01_Stuart.mp3", "intro_02_Stuart.mp3", "intro_03_Stuart.mp3",
+		"intro_04_Stuart.mp3", "intro_05_Stuart.mp3", "intro_06_Stuart.mp3", "intro_07_Stuart.mp3",
+	}
+
+	// Filter intros by voice name
+	var voiceIntros []string
+	for _, intro := range allIntros {
+		if strings.Contains(intro, dailyVoice.Name) {
+			voiceIntros = append(voiceIntros, intro)
+		}
+	}
+
+	// If no intros found for this voice, fall back to Antoni
+	if len(voiceIntros) == 0 {
+		for _, intro := range allIntros {
+			if strings.Contains(intro, "Antoni") {
+				voiceIntros = append(voiceIntros, intro)
+			}
+		}
+	}
+
+	// Select an intro deterministically based on the day
+	now := time.Now()
+	daySeed := now.Year()*10000 + int(now.Month())*100 + now.Day()
+	introIndex := (daySeed * 7) % len(voiceIntros)
+	selected := voiceIntros[introIndex]
+
+	return fmt.Sprintf("%s/audio/intros/%s", baseURL, selected), voiceID
+}
+
+// GetEnhancedMixer returns the enhanced intro mixer for use by other services
+func (am *AudioManager) GetEnhancedMixer() *EnhancedIntroMixer {
+	return am.enhancedMixer
 }
 
 // DownloadAndCacheBirdSong downloads bird song from Xeno-canto and caches it
