@@ -102,7 +102,7 @@ func (dig *DynamicIntroGenerator) generateSpeech(text string, voiceID string) ([
 		"voice_settings": map[string]interface{}{
 			"stability":        0.5,
 			"similarity_boost": 0.5,
-			"speed":            0.95, // Slightly slower speed for kids (95% of normal)
+			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
 	}
 

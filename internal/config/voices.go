@@ -28,12 +28,12 @@ var DefaultVoices = []VoiceProfile{
 		Region:   "British",
 		Language: "en-GB",
 	},
-	{
-		ID:       "ErXwobaYiN019PkySvjV",
-		Name:     "Antoni",
-		Region:   "American",
-		Language: "en-US",
-	},
+	//{
+	//	ID:       "ErXwobaYiN019PkySvjV",
+	//	Name:     "Antoni",
+	//	Region:   "American",
+	//	Language: "en-US",
+	//},
 	{
 		ID:       "5GZaeOOG7yqLdoTRsaa6",
 		Name:     "Charlotte",

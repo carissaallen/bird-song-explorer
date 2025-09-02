@@ -34,8 +34,8 @@ if [ -z "$YOTO_CLIENT_ID" ]; then
 fi
 
 # Correct Yoto OAuth endpoints
-AUTH_URL="https://api.yotoplay.com/authorize"
-TOKEN_URL="https://api.yotoplay.com/oauth/token"
+AUTH_URL="https://login.yotoplay.com/oauth/authorize"
+TOKEN_URL="https://login.yotoplay.com/oauth/token"
 REDIRECT_URI="https://bird-song-explorer-362662614716.us-central1.run.app/api/v1/yoto/webhook"
 
 echo -e "${YELLOW}Step 1: Generate Authorization URL${NC}"
@@ -46,8 +46,9 @@ echo ""
 # Generate state for security
 STATE=$(openssl rand -hex 16)
 
-# Build authorization URL - Note: Yoto uses redirect_url not redirect_uri
-AUTH_FULL_URL="${AUTH_URL}?client_id=${YOTO_CLIENT_ID}&redirect_url=${REDIRECT_URI}&response_type=code&state=${STATE}&scope=offline_access"
+# Build authorization URL - use the old working client ID
+YOTO_CLIENT_ID="qRdsgw6mmhaTWPvauY1VyE3Mkx64yaHU"
+AUTH_FULL_URL="${AUTH_URL}?client_id=${YOTO_CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&state=${STATE}&scope=offline_access"
 
 echo -e "${GREEN}${AUTH_FULL_URL}${NC}"
 echo ""
@@ -73,10 +74,8 @@ if [ ! -z "$AUTH_CODE" ]; then
     echo ""
     
     # Exchange authorization code for tokens
+    YOTO_CLIENT_ID="qRdsgw6mmhaTWPvauY1VyE3Mkx64yaHU"
     TOKEN_REQUEST="grant_type=authorization_code&client_id=${YOTO_CLIENT_ID}&code=${AUTH_CODE}&redirect_uri=${REDIRECT_URI}"
-    if [ ! -z "$YOTO_CLIENT_SECRET" ]; then
-        TOKEN_REQUEST="${TOKEN_REQUEST}&client_secret=${YOTO_CLIENT_SECRET}"
-    fi
     
     RESPONSE=$(curl -s -X POST "${TOKEN_URL}" \
         -H "Content-Type: application/x-www-form-urlencoded" \
@@ -159,8 +158,7 @@ EOF
         echo "Common issues:"
         echo "1. Authorization code has already been used"
         echo "2. Authorization code has expired (they expire quickly)"
-        echo "3. Client credentials are incorrect"
-        echo "4. Redirect URI doesn't match what's configured in Yoto"
+        echo "3. Redirect URI doesn't match what's configured in Yoto"
         exit 1
     fi
 else

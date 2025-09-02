@@ -9,9 +9,11 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/callen/bird-song-explorer/internal/models"
 	"github.com/callen/bird-song-explorer/internal/services"
 )
 
@@ -83,6 +85,9 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 	// Extract intro text from the URL if it's a pre-recorded intro
 	cm.extractIntroTextFromURL(introURL)
 
+	// Check if this is an enhanced intro and capture ambience data
+	cm.captureAmbienceFromEnhancedIntro(introURL)
+
 	introSha, introInfo, err := cm.uploader.UploadAudioFromURL(introURL, "Bird Song Explorer Intro")
 	if err != nil {
 		return fmt.Errorf("failed to upload intro: %w", err)
@@ -119,13 +124,7 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		return fmt.Errorf("failed to upload bird song: %w", err)
 	}
 
-	// Store bird song data for outro mixing (download it for later use)
-	if resp, err := http.Get(birdSongURL); err == nil {
-		defer resp.Body.Close()
-		if birdData, err := io.ReadAll(resp.Body); err == nil {
-			cm.lastBirdSongData = birdData
-		}
-	}
+	// No longer storing bird song data for outro - we'll use ambience instead
 
 	var descriptionSha string
 	var descriptionInfo *TranscodeResponse
@@ -136,12 +135,16 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		var descriptionData []byte
 		var err error
 
-		// Keep V4 fact generator disabled to avoid stack overflow
-		// The V4 generator with eBird API integration is available but disabled
-		// until we can properly test it in isolation
-		if false && latitude != 0 && longitude != 0 {
+		// Use enhanced V4 generator with location awareness when coordinates are available
+		// The V4 generator includes eBird API integration for local sightings
+		enableEnhancedFacts := true
+
+		if enableEnhancedFacts && latitude != 0 && longitude != 0 {
+			fmt.Printf("[CONTENT_UPDATE] Using enhanced facts with location: %.4f, %.4f\n", latitude, longitude)
 			descriptionData, err = cm.generateEnhancedBirdDescription(birdDescription, birdName, voiceID, latitude, longitude)
 		} else {
+			fmt.Printf("[CONTENT_UPDATE] Using standard facts without location (enhanced=%v, lat=%v, lng=%v)\n",
+				enableEnhancedFacts, latitude != 0, longitude != 0)
 			descriptionData, err = cm.generateBirdDescription(birdDescription, birdName, voiceID)
 		}
 
@@ -195,7 +198,6 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		}
 	}
 
-	// Get hiking boot icon for outro
 	var hikingBootIcon string
 	if hasOutro {
 		if cm.iconUploader != nil {
@@ -272,7 +274,6 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		birdOverlayLabel = "3"
 	}
 
-	// Start with meadowlark as the default icon
 	var birdIcon string
 
 	if cm.iconUploader != nil {
@@ -522,7 +523,6 @@ func (cm *ContentManager) sendUpdateRequest(cardID string, updateReq interface{}
 // generateBirdAnnouncement creates a short audio announcing the bird
 // Returns the audio data directly instead of a URL
 func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID string) ([]byte, error) {
-	// Check if we have ElevenLabs API key
 	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
 	if elevenLabsKey == "" {
 		return nil, fmt.Errorf("no ElevenLabs API key configured")
@@ -533,7 +533,27 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 		return nil, fmt.Errorf("voice ID is required for announcement generation")
 	}
 
-	announcement := fmt.Sprintf("Today's bird is the %s! Listen carefully to its unique song.", birdName)
+	// Check if we have ambience data from Track 1 (enhanced intro)
+	if cm.selectedAmbience != "" && len(cm.ambienceData) > 0 {
+		// Use enhanced announcement with continuing ambience
+		enhancedAnnouncement := services.NewEnhancedBirdAnnouncement(elevenLabsKey)
+		announcementData, err := enhancedAnnouncement.GenerateAnnouncementFromAudioData(
+			birdName,
+			voiceID,
+			cm.ambienceData,
+		)
+		if err == nil {
+			// Store the announcement text for transitions
+			cm.lastAnnouncementText = fmt.Sprintf("Today's bird is the %s! . . . Listen carefully to its unique song.", birdName)
+			return announcementData, nil
+		}
+		// Fall through to standard generation if enhanced fails
+	}
+
+	// Add pauses between sentences using spaced periods and em dash
+	// ElevenLabs responds better to punctuation than line breaks
+	// Spaced periods (. . .) create a longer pause for emphasis
+	announcement := fmt.Sprintf("Today's bird is the %s! . . . Listen carefully to its unique song.", birdName)
 
 	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
@@ -544,9 +564,8 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 		"voice_settings": map[string]interface{}{
 			"stability":        0.5,
 			"similarity_boost": 0.5,
-			"speed":            0.95, // Slightly slower speed for kids (95% of normal)
+			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
-		// Add previous_text from the Introduction for smooth transition
 		"previous_text": cm.lastIntroText,
 	}
 
@@ -589,32 +608,24 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 
 // generateOutro creates an outro audio with jokes, teasers, or wisdom
 func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte, error) {
-	// Check if we have ElevenLabs API key
 	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
 	if elevenLabsKey == "" {
 		return nil, fmt.Errorf("no ElevenLabs API key configured")
 	}
-
-	// Voice ID must be provided by the caller
 	if voiceID == "" {
 		return nil, fmt.Errorf("voice ID is required for outro generation")
 	}
 
-	// Get the current day of week for outro type selection
 	now := time.Now()
 	dayOfWeek := now.Weekday()
 
-	// Generate outro text based on day and bird
 	outroManager := services.NewOutroManager()
 	outroText := outroManager.GenerateOutroText(birdName, dayOfWeek)
 
-	// Log the outro text for debugging
 	fmt.Printf("Generating outro for %s on %s: %s\n", birdName, dayOfWeek.String(), outroText)
 
-	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
 
-	// Determine previous text based on what tracks were generated
 	var previousText string
 	if cm.lastDescriptionText != "" {
 		previousText = cm.lastDescriptionText
@@ -629,7 +640,7 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 		"voice_settings": map[string]interface{}{
 			"stability":         0.6,
 			"similarity_boost":  0.6,
-			"speed":             0.92, // Slightly slower for goodbye message
+			"speed":             0.88, // Even slower for goodbye message
 			"style":             0.3,  // Add some style/emotion
 			"use_speaker_boost": true, // Enhance voice clarity
 		},
@@ -680,18 +691,18 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 		return nil, err
 	}
 
-	// Mix with bird song from track 3 as nature background
-	// Pass the bird song data if available
-	if cm.lastBirdSongData != nil && len(cm.lastBirdSongData) > 0 {
+	// Mix with the same ambience from intro for consistency
+	if cm.selectedAmbience != "" && len(cm.ambienceData) > 0 {
 		mixer := services.NewAudioMixer()
-		mixedAudio, err := mixer.MixOutroWithNatureSounds(audioData, cm.lastBirdSongData)
+		mixedAudio, err := mixer.MixOutroWithAmbienceAndJingle(audioData, cm.ambienceData, cm.selectedAmbience)
 		if err != nil {
+			fmt.Printf("Warning: Failed to mix outro with ambience: %v\n", err)
 			return audioData, nil // Return voice only if mixing fails
 		}
 		return mixedAudio, nil
 	}
 
-	// If no bird song available, return voice only
+	// If no ambience available, return voice only
 	return audioData, nil
 }
 
@@ -709,7 +720,9 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		return nil, fmt.Errorf("voice ID is required for description generation")
 	}
 
-	descriptionText := fmt.Sprintf("Did you know? %s Isn't that amazing? Nature is full of wonderful surprises!", description)
+	// Add pauses between sentences for better cadence
+	// Use spaced periods and em dash for effective pausing
+	descriptionText := fmt.Sprintf("Did you know? . . . %s . . . Isn't that amazing? — Nature is full of wonderful surprises!", description)
 
 	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
@@ -720,7 +733,7 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		"voice_settings": map[string]interface{}{
 			"stability":        0.6,
 			"similarity_boost": 0.6,
-			"speed":            0.95, // Slightly slower speed for kids (95% of normal)
+			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
 		// Add previous_text from Track 2 (announcement) for smooth transition
 		"previous_text": cm.lastAnnouncementText,
@@ -764,12 +777,96 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 }
 
 // generateEnhancedBirdDescription creates location-aware audio narration using V4 fact generator
-// This function is a placeholder that just calls the regular version for now
-// The actual V4 integration is disabled to prevent stack overflow issues
 func (cm *ContentManager) generateEnhancedBirdDescription(description string, birdName string, voiceID string, latitude, longitude float64) ([]byte, error) {
-	// For now, just call the regular version
-	// The V4 fact generator integration is disabled to prevent stack overflow
-	return cm.generateBirdDescription(description, birdName, voiceID)
+	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
+	if elevenLabsKey == "" {
+		// Fall back to regular description if no TTS available
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	ebirdAPIKey := os.Getenv("EBIRD_API_KEY")
+	if ebirdAPIKey == "" {
+		// Fall back to regular description if no eBird API
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	factGen := services.NewImprovedFactGeneratorV4(ebirdAPIKey)
+
+	bird := &models.Bird{
+		CommonName:     birdName,
+		ScientificName: "", // Could be extracted from Wikipedia if needed
+		Family:         "",
+		AudioURL:       "", // Not needed for description generation
+		Description:    description,
+	}
+
+	enhancedScript := factGen.GenerateExplorersGuideScriptWithLocation(bird, latitude, longitude)
+	fmt.Printf("[ENHANCED_FACTS] Generated script: %d characters\n", len(enhancedScript))
+
+	// If the script is too short or empty, fall back to regular
+	if len(enhancedScript) < 100 {
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	// Limit script length to prevent excessive TTS costs
+	maxLength := 2500
+	if len(enhancedScript) > maxLength {
+		enhancedScript = enhancedScript[:maxLength]
+		// Find the last complete sentence
+		lastPeriod := strings.LastIndex(enhancedScript, ".")
+		if lastPeriod > 0 {
+			enhancedScript = enhancedScript[:lastPeriod+1]
+		}
+	}
+
+	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
+
+	requestBody := map[string]interface{}{
+		"text":     enhancedScript,
+		"model_id": "eleven_multilingual_v2",
+		"voice_settings": map[string]float64{
+			"stability":         0.5,
+			"similarity_boost":  0.5,
+			"style":             0.0,
+			"use_speaker_boost": 0,
+		},
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		fmt.Printf("[ENHANCED_FACTS] Failed to marshal request: %v\n", err)
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		fmt.Printf("[ENHANCED_FACTS] Failed to create request: %v\n", err)
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("xi-api-key", elevenLabsKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("[ENHANCED_FACTS] TTS request failed: %v\n", err)
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("[ENHANCED_FACTS] TTS API error: %d\n", resp.StatusCode)
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	audioData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("[ENHANCED_FACTS] Failed to read audio data: %v\n", err)
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	return audioData, nil
 }
 
 // extractIntroTextFromURL extracts the intro text from a pre-recorded intro URL
@@ -801,4 +898,43 @@ func (cm *ContentManager) extractIntroTextFromURL(introURL string) {
 
 	// If not a pre-recorded intro or pattern not found, use a default
 	cm.lastIntroText = "Welcome to Bird Song Explorer!"
+}
+
+// captureAmbienceFromEnhancedIntro checks if the intro is enhanced and captures ambience data
+func (cm *ContentManager) captureAmbienceFromEnhancedIntro(introURL string) {
+	// Check if this is an enhanced intro (from cache)
+	if !strings.Contains(introURL, "/audio/cache/enhanced_intros/") {
+		// Not an enhanced intro, clear ambience data
+		cm.selectedAmbience = ""
+		cm.ambienceData = nil
+		return
+	}
+
+	// Try to get the ambience data from the audio manager
+	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
+	if elevenLabsKey == "" {
+		return
+	}
+
+	// Create an enhanced intro mixer to get ambience info
+	mixer := services.NewEnhancedIntroMixer(elevenLabsKey)
+
+	// Determine which ambience was selected based on the day (same logic as intro generation)
+	ambiences := mixer.GetAvailableAmbiences()
+	now := time.Now()
+	daySeed := now.Year()*10000 + int(now.Month())*100 + now.Day()
+	selectedAmbienceIdx := daySeed % len(ambiences)
+
+	if selectedAmbienceIdx < len(ambiences) {
+		selectedAmbience := ambiences[selectedAmbienceIdx]
+		cm.selectedAmbience = selectedAmbience.Name
+
+		// Try to read the ambience file
+		ambiencePath := filepath.Join("sound_effects", selectedAmbience.Path)
+		if data, err := os.ReadFile(ambiencePath); err == nil {
+			cm.ambienceData = data
+			fmt.Printf("[CONTENT_UPDATE] Captured %s ambience for Track 2 (%d bytes)\n",
+				cm.selectedAmbience, len(cm.ambienceData))
+		}
+	}
 }

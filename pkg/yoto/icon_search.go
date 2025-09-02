@@ -68,36 +68,13 @@ func (is *IconSearcher) SearchBirdIcon(birdName string) (string, error) {
 	}
 	is.cacheMu.RUnlock()
 
-	// First try the full bird name (might get lucky with exact match)
-	fmt.Printf("Searching yotoicons.com for: %s\n", birdName)
-	yotoiconsResult, err := is.searchYotoicons(birdName)
-	if err == nil && yotoiconsResult != nil {
-		// Upload the icon from yotoicons.com to Yoto
-		mediaID, err := is.uploadYotoiconsIcon(yotoiconsResult)
-		if err == nil && mediaID != "" {
-			result := &IconSearchResult{
-				MediaID:  mediaID,
-				Title:    yotoiconsResult.Title,
-				Source:   "yotoicons",
-				Author:   yotoiconsResult.Author,
-				CachedAt: time.Now(),
-			}
-
-			// Cache the result
-			is.cacheMu.Lock()
-			is.cache[birdName] = result
-			is.cacheMu.Unlock()
-
-			fmt.Printf("Found icon for %s using full name\n", birdName)
-			return FormatIconID(mediaID), nil
-		}
-	}
-
-	// Try variations of the bird name on yotoicons
+	// Generate variations first (more generic terms)
 	variations := is.generateBirdNameVariations(birdName)
+
+	// Try variations first (they're more likely to have icons)
 	for _, variation := range variations {
 		fmt.Printf("Searching yotoicons.com for variation: %s...\n", variation)
-		yotoiconsResult, err = is.searchYotoicons(variation)
+		yotoiconsResult, err := is.searchYotoicons(variation)
 		if err == nil && yotoiconsResult != nil {
 			// Upload the icon from yotoicons.com to Yoto
 			mediaID, err := is.uploadYotoiconsIcon(yotoiconsResult)
@@ -118,6 +95,31 @@ func (is *IconSearcher) SearchBirdIcon(birdName string) (string, error) {
 				fmt.Printf("Found and uploaded icon from yotoicons for %s (variation: %s): %s\n", birdName, variation, mediaID)
 				return FormatIconID(mediaID), nil
 			}
+		}
+	}
+
+	// If variations didn't work, try the full bird name as a last resort
+	fmt.Printf("Searching yotoicons.com for full name: %s\n", birdName)
+	yotoiconsResult, err := is.searchYotoicons(birdName)
+	if err == nil && yotoiconsResult != nil {
+		// Upload the icon from yotoicons.com to Yoto
+		mediaID, err := is.uploadYotoiconsIcon(yotoiconsResult)
+		if err == nil && mediaID != "" {
+			result := &IconSearchResult{
+				MediaID:  mediaID,
+				Title:    yotoiconsResult.Title,
+				Source:   "yotoicons",
+				Author:   yotoiconsResult.Author,
+				CachedAt: time.Now(),
+			}
+
+			// Cache the result
+			is.cacheMu.Lock()
+			is.cache[birdName] = result
+			is.cacheMu.Unlock()
+
+			fmt.Printf("Found icon for %s using full name\n", birdName)
+			return FormatIconID(mediaID), nil
 		}
 	}
 
@@ -241,25 +243,17 @@ func (is *IconSearcher) searchYotoicons(query string) (*IconSearchResult, error)
 	}
 
 	if len(matches) > 0 {
-		// NEW LOGIC: For bird searches, we want to ensure we're getting actual bird icons
-		// Check if the search term appears in the page AND the word "bird" appears
-		// This helps confirm we found a bird-related icon
+		// Check if we found the search term on the page
 		lowerQuery := strings.ToLower(query)
-
-		// For single-word bird types (like "Robin"), check if both the bird type AND "bird" appear
 		hasSearchTerm := strings.Contains(lowerHTML, lowerQuery)
-		hasBirdKeyword := strings.Contains(lowerHTML, "bird")
 
-		// Accept the result if:
-		// 1. We found the search term AND it's a bird page (has "bird" keyword)
-		// 2. OR the query itself is "bird" (looking for generic bird)
-		if (hasSearchTerm && hasBirdKeyword) || lowerQuery == "bird" {
-			fmt.Printf("Found bird icon for %s (search term: %v, bird keyword: %v)\n",
-				query, hasSearchTerm, hasBirdKeyword)
-		} else if !hasBirdKeyword {
-			// If "bird" doesn't appear on the page, this might not be a bird icon
-			fmt.Printf("Warning: Search for %s returned results but no 'bird' keyword found\n", query)
-			// Still continue, but log the warning
+		// Accept the result if we found the search term
+		// We're being less strict now - if searching for "duck" finds a duck icon, that's good enough
+		if hasSearchTerm {
+			fmt.Printf("Found icon for %s on yotoicons.com\n", query)
+		} else {
+			// Log if we're getting results but not for our search term
+			fmt.Printf("Warning: Search for %s returned results but search term not found on page\n", query)
 		}
 
 		// Avoid truly generic results only when we have no bird association
@@ -354,9 +348,15 @@ func (is *IconSearcher) generateBirdNameVariations(birdName string) []string {
 	}
 
 	// Extract the main bird type from compound names
+	// Use word boundaries to avoid false matches like "owl" in "Meadowlark"
+	lowerBirdName := strings.ToLower(birdName)
 	for _, birdType := range getCommonBirdTypes() {
-		if strings.Contains(strings.ToLower(birdName), strings.ToLower(birdType)) {
-			variations = append(variations, birdType)
+		// Check for whole word match, not substring
+		for _, word := range strings.Fields(lowerBirdName) {
+			if word == birdType {
+				variations = append(variations, birdType)
+				break
+			}
 		}
 	}
 
@@ -399,6 +399,18 @@ func getCommonBirdTypes() []string {
 		"kestrel", "falcon", "vulture", "condor", "osprey", "harrier",
 		"kingfisher", "bee-eater", "roller", "hoopoe", "cuckoo", "roadrunner",
 		"swift", "hummingbird", "trogon", "toucan", "hornbill", "puffin",
+		// Added common North American birds that were missing
+		"mockingbird", "meadowlark", "bluebird", "catbird", "thrasher", "towhee",
+		"junco", "siskin", "goldfinch", "redpoll", "crossbill", "starling",
+		"cowbird", "bobolink", "shrike", "magpie", "nutcracker", "dipper",
+		"wagtail", "pipit", "lark", "swallow", "martin", "bushtit",
+		"kinglet", "gnatcatcher", "creeper", "waxwing", "phalarope", "yellowlegs",
+		"dowitcher", "snipe", "godwit", "curlew", "whimbrel", "turnstone",
+		"knot", "dunlin", "sanderling", "stilt", "avocet", "oystercatcher",
+		"skimmer", "murre", "guillemot", "auklet", "murrelet", "razorbill",
+		"jaeger", "skua", "kittiwake", "fulmar", "shearwater", "petrel",
+		"gannet", "booby", "tropicbird", "frigatebird", "anhinga", "rail",
+		"coot", "moorhen", "gallinule", "sora", "bittern", "night-heron",
 	}
 }
 

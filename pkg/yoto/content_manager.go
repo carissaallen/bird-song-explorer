@@ -15,10 +15,11 @@ type ContentManager struct {
 	uploader             *AudioUploader
 	iconUploader         *IconUploader
 	iconSearcher         *IconSearcher
-	lastBirdSongData     []byte // Store bird song for background sounds in final track
 	lastIntroText        string // Store intro text for transitions (see: 'previous_track')
 	lastAnnouncementText string // Store announcement text for transitions (see: 'previous_track')
 	lastDescriptionText  string // Store description text for transitions (see: 'previous_track')
+	selectedAmbience     string // Store which ambience was used in intro for continuity
+	ambienceData         []byte // Store ambience audio data for Track 2 and outro
 }
 
 type CreateContentResponse struct {

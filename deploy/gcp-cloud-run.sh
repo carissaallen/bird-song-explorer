@@ -18,22 +18,12 @@ gcloud config set project $PROJECT_ID
 echo "Enabling required APIs..."
 gcloud services enable run.googleapis.com
 gcloud services enable cloudbuild.googleapis.com
-gcloud services enable secretmanager.googleapis.com
 
-# 3. Create secrets in Secret Manager
-echo "Creating secrets..."
-echo -n "$EBIRD_API_KEY" | gcloud secrets create ebird-api-key --data-file=- 2>/dev/null || echo "ebird-api-key already exists"
-echo -n "$XENOCANTO_API_KEY" | gcloud secrets create xenocanto-api-key --data-file=- 2>/dev/null || echo "xenocanto-api-key already exists"
-echo -n "$ELEVENLABS_API_KEY" | gcloud secrets create elevenlabs-api-key --data-file=- 2>/dev/null || echo "elevenlabs-api-key already exists"
-echo -n "$YOTO_CLIENT_SECRET" | gcloud secrets create yoto-client-secret --data-file=- 2>/dev/null || echo "yoto-client-secret already exists"
-echo -n "$YOTO_ACCESS_TOKEN" | gcloud secrets create yoto-access-token --data-file=- 2>/dev/null || echo "yoto-access-token already exists"
-echo -n "$YOTO_REFRESH_TOKEN" | gcloud secrets create yoto-refresh-token --data-file=- 2>/dev/null || echo "yoto-refresh-token already exists"
-
-# 4. Build and push container
+# 3. Build and push container
 echo "Building container..."
 gcloud builds submit --tag gcr.io/$PROJECT_ID/$SERVICE_NAME
 
-# 5. Deploy to Cloud Run
+# 4. Deploy to Cloud Run with environment variables
 echo "Deploying to Cloud Run..."
 gcloud run deploy $SERVICE_NAME \
   --image gcr.io/$PROJECT_ID/$SERVICE_NAME \
@@ -42,10 +32,17 @@ gcloud run deploy $SERVICE_NAME \
   --allow-unauthenticated \
   --port 8080 \
   --memory 512Mi \
-  --set-env-vars="ENV=production,YOTO_CLIENT_ID=qRdsgw6mmhaTWPvauY1VyE3Mkx64yaHU,YOTO_API_BASE_URL=https://api.yotoplay.com,YOTO_CARD_ID=$YOTO_CARD_ID" \
-  --set-secrets="EBIRD_API_KEY=ebird-api-key:latest,XENOCANTO_API_KEY=xenocanto-api-key:latest,ELEVENLABS_API_KEY=elevenlabs-api-key:latest,YOTO_CLIENT_SECRET=yoto-client-secret:latest,YOTO_ACCESS_TOKEN=yoto-access-token:latest,YOTO_REFRESH_TOKEN=yoto-refresh-token:latest"
+  --set-env-vars="ENV=production,\
+YOTO_CLIENT_ID=$YOTO_CLIENT_ID,\
+YOTO_API_BASE_URL=$YOTO_API_BASE_URL,\
+YOTO_CARD_ID=$YOTO_CARD_ID,\
+YOTO_ACCESS_TOKEN=$YOTO_ACCESS_TOKEN,\
+YOTO_REFRESH_TOKEN=$YOTO_REFRESH_TOKEN,\
+EBIRD_API_KEY=$EBIRD_API_KEY,\
+XENOCANTO_API_KEY=$XENOCANTO_API_KEY,\
+ELEVENLABS_API_KEY=$ELEVENLABS_API_KEY"
 
-# 6. Get the URL
+# 5. Get the URL
 echo ""
 echo "✅ Deployment complete!"
 echo ""

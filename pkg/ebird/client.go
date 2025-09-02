@@ -33,6 +33,16 @@ type Species struct {
 	Order          string `json:"order"`
 }
 
+type Hotspot struct {
+	LocationID   string  `json:"locId"`
+	LocationName string  `json:"locName"`
+	CountryCode  string  `json:"countryCode"`
+	SubNational1 string  `json:"subnational1Code"`
+	SubNational2 string  `json:"subnational2Code"`
+	Latitude     float64 `json:"lat"`
+	Longitude    float64 `json:"lng"`
+}
+
 func NewClient(apiKey string) *Client {
 	return &Client{
 		apiKey:     apiKey,
@@ -75,6 +85,42 @@ func (c *Client) GetRecentObservations(lat, lng float64, days int) ([]Observatio
 	}
 
 	return observations, nil
+}
+
+func (c *Client) GetNearbyHotspots(lat, lng float64, dist int) ([]Hotspot, error) {
+	endpoint := fmt.Sprintf("%s/ref/hotspot/geo", baseURL)
+
+	params := url.Values{}
+	params.Add("lat", fmt.Sprintf("%.4f", lat))
+	params.Add("lng", fmt.Sprintf("%.4f", lng))
+	params.Add("dist", fmt.Sprintf("%d", dist))
+	params.Add("fmt", "json")
+
+	fullURL := fmt.Sprintf("%s?%s", endpoint, params.Encode())
+
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("X-eBirdApiToken", c.apiKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("eBird API error: %d", resp.StatusCode)
+	}
+
+	var hotspots []Hotspot
+	if err := json.NewDecoder(resp.Body).Decode(&hotspots); err != nil {
+		return nil, err
+	}
+
+	return hotspots, nil
 }
 
 func (c *Client) GetSpeciesInfo(speciesCode string) (*Species, error) {

@@ -17,8 +17,8 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	router.GET("/health", healthCheck)
 
-	// Serve static audio files
-	router.Static("/audio/intros", "./final_intros")
+	router.GET("/audio/intros/:filename", handler.ServeIntroWithNatureSounds)
+	router.Static("/audio/outros", "./final_outros")
 	router.Static("/audio/cache", "./audio_cache") // This already serves everything under audio_cache including dynamic_intros
 
 	v1 := router.Group("/api/v1")
@@ -29,8 +29,6 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		v1.POST("/update-card/:cardId", handler.UpdateCardManually)
 		v1.POST("/daily-update", handler.DailyUpdateHandler)
 		v1.POST("/yoto/token/refresh", handler.HandleTokenRefresh)
-		v1.GET("/test/yoto-upload", handler.TestYotoUploadURL)
-		v1.GET("/test/yoto-card", handler.TestYotoCard)
 	}
 
 	return router

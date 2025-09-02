@@ -12,7 +12,6 @@ type Config struct {
 	Environment        string
 	DatabaseURL        string
 	YotoClientID       string
-	YotoClientSecret   string
 	YotoAccessToken    string
 	YotoRefreshToken   string
 	YotoCardID         string
@@ -36,7 +35,6 @@ func Load() *Config {
 		Environment:        getEnv("ENV", "development"),
 		DatabaseURL:        getEnv("DATABASE_URL", ""),
 		YotoClientID:       getEnv("YOTO_CLIENT_ID", ""),
-		YotoClientSecret:   getEnv("YOTO_CLIENT_SECRET", ""),
 		YotoAccessToken:    getEnv("YOTO_ACCESS_TOKEN", ""),
 		YotoRefreshToken:   getEnv("YOTO_REFRESH_TOKEN", ""),
 		YotoCardID:         getEnv("YOTO_CARD_ID", ""),
