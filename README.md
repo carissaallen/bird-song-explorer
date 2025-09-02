@@ -142,8 +142,8 @@ Please open an issue first to discuss major changes.
 
 ## License
 
-MIT - Feel free to adapt this for your own Yoto adventures! 🐦
+MIT - Feel free to adapt this for your own Yoto adventures! 
 
 ---
 
-*Built with love for young explorers and their Yoto players. May every morning bring the wonder of nature to your home.*
+*Built with love for young explorers and their Yoto players. May every morning bring the wonder of nature to your home.* 🐦
