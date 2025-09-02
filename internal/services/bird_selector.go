@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
@@ -212,9 +213,45 @@ func (bs *BirdSelector) enrichWithWikipedia(bird *models.Bird) {
 
 	// Combine descriptions from multiple sources
 	if len(descriptions) > 0 {
-		bird.Description = strings.Join(descriptions, " ")
+		combinedDescription := strings.Join(descriptions, " ")
+		// Clean up any dates/years from the description
+		bird.Description = bs.cleanDescriptionText(combinedDescription)
 	} else {
 		// Fallback description if no sources have data
 		bird.Description = fmt.Sprintf("The %s is an amazing bird that you can hear in your area! Listen carefully to learn its unique song.", bird.CommonName)
 	}
+}
+
+// cleanDescriptionText removes dates and years from description text
+func (bs *BirdSelector) cleanDescriptionText(text string) string {
+	// Split into words
+	words := strings.Fields(text)
+	var cleaned []string
+
+	for _, word := range words {
+		// Remove standalone 4-digit years (1900-2099)
+		if len(word) == 4 {
+			if year, err := strconv.Atoi(strings.Trim(word, ".,!?")); err == nil && year >= 1900 && year <= 2099 {
+				continue
+			}
+		}
+
+		// Skip date patterns like "2023-01-15" or "01/15/2023"
+		if strings.Contains(word, "-") || strings.Contains(word, "/") {
+			hasOnlyNumbersAndSeparators := true
+			for _, r := range word {
+				if !((r >= '0' && r <= '9') || r == '-' || r == '/' || r == '.' || r == ',') {
+					hasOnlyNumbersAndSeparators = false
+					break
+				}
+			}
+			if hasOnlyNumbersAndSeparators {
+				continue
+			}
+		}
+
+		cleaned = append(cleaned, word)
+	}
+
+	return strings.Join(cleaned, " ")
 }

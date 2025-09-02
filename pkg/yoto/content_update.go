@@ -823,13 +823,14 @@ func (cm *ContentManager) generateEnhancedBirdDescription(description string, bi
 
 	requestBody := map[string]interface{}{
 		"text":     enhancedScript,
-		"model_id": "eleven_multilingual_v2",
-		"voice_settings": map[string]float64{
-			"stability":         0.5,
-			"similarity_boost":  0.5,
-			"style":             0.0,
-			"use_speaker_boost": 0,
+		"model_id": "eleven_monolingual_v1",
+		"voice_settings": map[string]interface{}{
+			"stability":        0.6,
+			"similarity_boost": 0.6,
+			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
+		// Add previous_text from Track 2 (announcement) for smooth transition
+		"previous_text": cm.lastAnnouncementText,
 	}
 
 	jsonData, err := json.Marshal(requestBody)
