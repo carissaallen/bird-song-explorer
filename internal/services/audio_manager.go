@@ -13,11 +13,11 @@ import (
 )
 
 type AudioManager struct {
-	introDir         string
-	cacheDir         string
-	introURLs        []string // URLs where intros are hosted
-	enhancedMixer    *EnhancedIntroMixer
-	elevenLabsKey    string
+	introDir      string
+	cacheDir      string
+	introURLs     []string // URLs where intros are hosted
+	enhancedMixer *EnhancedIntroMixer
+	elevenLabsKey string
 }
 
 func NewAudioManager() *AudioManager {
@@ -147,11 +147,8 @@ func (am *AudioManager) getEnhancedIntroURL(baseURL string, voiceID string) (str
 		return fmt.Sprintf("%s/audio/cache/enhanced_intros/%s.mp3", baseURL, cacheKey), voiceID
 	}
 
-	// Generate new enhanced intro
-	introManager := NewIntroManager()
-	introText := introManager.GetRandomIntro()
-	
-	introData, err := am.enhancedMixer.GenerateEnhancedIntroWithText(introText, voiceID)
+	// Generate enhanced intro using pre-recorded files
+	introData, err := am.enhancedMixer.GenerateEnhancedIntroWithPreRecorded(voiceID)
 	if err != nil {
 		fmt.Printf("Failed to generate enhanced intro: %v, falling back to standard\n", err)
 		// Fall back to standard intro

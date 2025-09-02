@@ -84,7 +84,7 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 
 	// Extract intro text from the URL if it's a pre-recorded intro
 	cm.extractIntroTextFromURL(introURL)
-	
+
 	// Check if this is an enhanced intro and capture ambience data
 	cm.captureAmbienceFromEnhancedIntro(introURL)
 
@@ -124,13 +124,7 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		return fmt.Errorf("failed to upload bird song: %w", err)
 	}
 
-	// Store bird song data for outro mixing (download it for later use)
-	if resp, err := http.Get(birdSongURL); err == nil {
-		defer resp.Body.Close()
-		if birdData, err := io.ReadAll(resp.Body); err == nil {
-			cm.lastBirdSongData = birdData
-		}
-	}
+	// No longer storing bird song data for outro - we'll use ambience instead
 
 	var descriptionSha string
 	var descriptionInfo *TranscodeResponse
@@ -697,18 +691,18 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 		return nil, err
 	}
 
-	// Mix with bird song from track 3 as nature background
-	// Pass the bird song data if available
-	if cm.lastBirdSongData != nil && len(cm.lastBirdSongData) > 0 {
+	// Mix with the same ambience from intro for consistency
+	if cm.selectedAmbience != "" && len(cm.ambienceData) > 0 {
 		mixer := services.NewAudioMixer()
-		mixedAudio, err := mixer.MixOutroWithNatureSounds(audioData, cm.lastBirdSongData)
+		mixedAudio, err := mixer.MixOutroWithAmbienceAndJingle(audioData, cm.ambienceData, cm.selectedAmbience)
 		if err != nil {
+			fmt.Printf("Warning: Failed to mix outro with ambience: %v\n", err)
 			return audioData, nil // Return voice only if mixing fails
 		}
 		return mixedAudio, nil
 	}
 
-	// If no bird song available, return voice only
+	// If no ambience available, return voice only
 	return audioData, nil
 }
 
@@ -924,22 +918,22 @@ func (cm *ContentManager) captureAmbienceFromEnhancedIntro(introURL string) {
 
 	// Create an enhanced intro mixer to get ambience info
 	mixer := services.NewEnhancedIntroMixer(elevenLabsKey)
-	
+
 	// Determine which ambience was selected based on the day (same logic as intro generation)
 	ambiences := mixer.GetAvailableAmbiences()
 	now := time.Now()
 	daySeed := now.Year()*10000 + int(now.Month())*100 + now.Day()
 	selectedAmbienceIdx := daySeed % len(ambiences)
-	
+
 	if selectedAmbienceIdx < len(ambiences) {
 		selectedAmbience := ambiences[selectedAmbienceIdx]
 		cm.selectedAmbience = selectedAmbience.Name
-		
+
 		// Try to read the ambience file
 		ambiencePath := filepath.Join("sound_effects", selectedAmbience.Path)
 		if data, err := os.ReadFile(ambiencePath); err == nil {
 			cm.ambienceData = data
-			fmt.Printf("[CONTENT_UPDATE] Captured %s ambience for Track 2 (%d bytes)\n", 
+			fmt.Printf("[CONTENT_UPDATE] Captured %s ambience for Track 2 (%d bytes)\n",
 				cm.selectedAmbience, len(cm.ambienceData))
 		}
 	}

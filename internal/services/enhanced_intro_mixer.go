@@ -14,17 +14,17 @@ import (
 
 // EnhancedIntroMixer handles creating dynamic intros with local sound effects
 type EnhancedIntroMixer struct {
-	soundEffectsPath   string
-	cacheDir          string
-	selectedAmbience  string // Track which ambience was used for passing to next track
-	narrationManager  *NarrationManager
+	soundEffectsPath string
+	cacheDir         string
+	selectedAmbience string // Track which ambience was used for passing to next track
+	narrationManager *NarrationManager
 }
 
 // NewEnhancedIntroMixer creates a new enhanced intro mixer
 func NewEnhancedIntroMixer(elevenLabsKey string) *EnhancedIntroMixer {
 	return &EnhancedIntroMixer{
 		soundEffectsPath: "sound_effects",
-		cacheDir:        "./audio_cache/enhanced_intros",
+		cacheDir:         "./audio_cache/enhanced_intros",
 		narrationManager: NewNarrationManager(elevenLabsKey),
 	}
 }
@@ -85,6 +85,12 @@ func (eim *EnhancedIntroMixer) GenerateEnhancedIntro(voiceID string) ([]byte, er
 
 // GenerateEnhancedIntroWithText creates intro with specific text
 func (eim *EnhancedIntroMixer) GenerateEnhancedIntroWithText(text string, voiceID string) ([]byte, error) {
+	// This method is deprecated - use GenerateEnhancedIntroWithPreRecorded instead
+	return eim.GenerateEnhancedIntroWithPreRecorded(voiceID)
+}
+
+// GenerateEnhancedIntroWithPreRecorded uses pre-recorded intro files with ambience overlay
+func (eim *EnhancedIntroMixer) GenerateEnhancedIntroWithPreRecorded(voiceID string) ([]byte, error) {
 	// Ensure cache directory exists
 	os.MkdirAll(eim.cacheDir, 0755)
 
@@ -107,26 +113,51 @@ func (eim *EnhancedIntroMixer) GenerateEnhancedIntroWithText(text string, voiceI
 		return nil, fmt.Errorf("chime file not found: %s", chimePath)
 	}
 
-	// Generate TTS with custom text
+	// Get the voice name for selecting the right pre-recorded intro
 	voiceManager := config.NewVoiceManager()
-	voice := VoiceConfig{VoiceID: voiceID}
+	var voiceName string
 	if voiceID == "" {
-		// Use daily voice if not specified
 		dailyVoice := voiceManager.GetDailyVoice()
-		voice = VoiceConfig{
-			Name:    dailyVoice.Name,
-			VoiceID: dailyVoice.ID,
+		voiceName = dailyVoice.Name
+		voiceID = dailyVoice.ID
+	} else {
+		// Look up voice name from ID using GetVoiceByID
+		voice := voiceManager.GetVoiceByID(voiceID)
+		if voice != nil {
+			voiceName = voice.Name
 		}
 	}
 
-	eim.narrationManager.selectedVoice = voice
-	ttsData, err := eim.narrationManager.generateAudio(text, voice)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate TTS: %w", err)
+	if voiceName == "" {
+		voiceName = "Antoni" // Default fallback
 	}
 
-	// Mix the audio components
-	mixedAudio, err := eim.mixAudioComponents(ambiencePath, chimePath, ttsData)
+	// Select the pre-recorded intro file based on voice and day
+	// Use a different seed component than voice selection for variety
+	introIndex := (daySeed * 7) % 8 // 8 intros per voice
+	introFileName := fmt.Sprintf("intro_%02d_%s.mp3", introIndex, voiceName)
+	introPath := filepath.Join("final_intros", introFileName)
+
+	// Check if the intro file exists
+	if _, err := os.Stat(introPath); err != nil {
+		// Try Antoni as fallback if voice-specific intro doesn't exist
+		introFileName = fmt.Sprintf("intro_%02d_Antoni.mp3", introIndex)
+		introPath = filepath.Join("final_intros", introFileName)
+		if _, err := os.Stat(introPath); err != nil {
+			return nil, fmt.Errorf("pre-recorded intro file not found: %s", introPath)
+		}
+	}
+
+	// Read the pre-recorded intro file
+	introData, err := os.ReadFile(introPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read intro file: %w", err)
+	}
+
+	fmt.Printf("[ENHANCED_INTRO] Using pre-recorded intro: %s\n", introFileName)
+
+	// Mix the audio components with volume normalization
+	mixedAudio, err := eim.mixAudioComponentsWithNormalization(ambiencePath, chimePath, introData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to mix audio components: %w", err)
 	}
@@ -136,6 +167,12 @@ func (eim *EnhancedIntroMixer) GenerateEnhancedIntroWithText(text string, voiceI
 
 // mixAudioComponents combines ambience, chime, and voice into a single track
 func (eim *EnhancedIntroMixer) mixAudioComponents(ambiencePath, chimePath string, ttsData []byte) ([]byte, error) {
+	// Deprecated - use mixAudioComponentsWithNormalization instead
+	return eim.mixAudioComponentsWithNormalization(ambiencePath, chimePath, ttsData)
+}
+
+// mixAudioComponentsWithNormalization combines ambience, chime, and voice with volume normalization
+func (eim *EnhancedIntroMixer) mixAudioComponentsWithNormalization(ambiencePath, chimePath string, introData []byte) ([]byte, error) {
 	// Check if ffmpeg is available
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		return nil, fmt.Errorf("ffmpeg not found in PATH")
@@ -143,56 +180,60 @@ func (eim *EnhancedIntroMixer) mixAudioComponents(ambiencePath, chimePath string
 
 	// Create temp files
 	tempDir := os.TempDir()
-	ttsFile := filepath.Join(tempDir, fmt.Sprintf("tts_%d.mp3", time.Now().Unix()))
+	introFile := filepath.Join(tempDir, fmt.Sprintf("intro_%d.mp3", time.Now().Unix()))
 	outputFile := filepath.Join(tempDir, fmt.Sprintf("intro_enhanced_%d.mp3", time.Now().Unix()))
 
-	// Write TTS data to temp file
-	if err := os.WriteFile(ttsFile, ttsData, 0644); err != nil {
-		return nil, fmt.Errorf("failed to write TTS file: %w", err)
+	// Write intro data to temp file
+	if err := os.WriteFile(introFile, introData, 0644); err != nil {
+		return nil, fmt.Errorf("failed to write intro file: %w", err)
 	}
-	defer os.Remove(ttsFile)
+	defer os.Remove(introFile)
 	defer os.Remove(outputFile)
 
-	// Get TTS duration
-	ttsDuration := eim.getAudioDuration(ttsFile)
-	if ttsDuration <= 0 {
-		ttsDuration = 5.0 // Default fallback
+	// Get intro duration
+	introDuration := eim.getAudioDuration(introFile)
+	if introDuration <= 0 {
+		introDuration = 5.0 // Default fallback
 	}
 
 	// Calculate timings
-	fadeInDuration := 2.5    // Ambience fade in duration
-	chimeDelay := 2.0        // When chime plays (during fade in)
-	voiceDelay := 3.0        // When voice starts (after fade in)
-	fadeOutStart := voiceDelay + ttsDuration
+	fadeInDuration := 2.5 // Ambience fade in duration
+	chimeDelay := 2.0     // When chime plays (during fade in)
+	voiceDelay := 3.0     // When voice starts (after fade in)
+	fadeOutStart := voiceDelay + introDuration
 	fadeOutDuration := 2.0
-	totalDuration := voiceDelay + ttsDuration + fadeOutDuration
+	totalDuration := voiceDelay + introDuration + fadeOutDuration
 
-	// Build ffmpeg command for mixing
+	// Build ffmpeg command for mixing with normalization
+	// Note: We boost the intro volume to match dynamic TTS levels
 	cmd := exec.Command("ffmpeg",
-		"-i", ambiencePath,  // Input: ambience
-		"-i", chimePath,     // Input: chime
-		"-i", ttsFile,       // Input: TTS voice
+		"-i", ambiencePath, // Input: ambience
+		"-i", chimePath, // Input: chime
+		"-i", introFile, // Input: pre-recorded intro
 		"-filter_complex",
 		fmt.Sprintf(
 			// Ambience: fade in, then duck to 15%% volume under voice
 			"[0:a]afade=t=in:st=0:d=%.1f,volume=0.35[ambience_fade];"+
-			"[ambience_fade]volume=0.15:enable='gte(t,%.1f)'[ambience_ducked];"+
-			// Chime: delay and set volume
-			"[1:a]adelay=%d|%d,volume=0.6[chime_delayed];"+
-			// Voice: delay
-			"[2:a]adelay=%d|%d[voice_delayed];"+
-			// Mix all three
-			"[ambience_ducked][chime_delayed][voice_delayed]amix=inputs=3:duration=longest:dropout_transition=0.5[mixed];"+
-			// Fade out at the end
-			"[mixed]afade=t=out:st=%.1f:d=%.1f[out]",
-			fadeInDuration,                // Ambience fade in duration
-			voiceDelay,                    // When to duck ambience
-			int(chimeDelay*1000),          // Chime delay (ms)
-			int(chimeDelay*1000),          // Chime delay for second channel
-			int(voiceDelay*1000),          // Voice delay (ms)
-			int(voiceDelay*1000),          // Voice delay for second channel
-			fadeOutStart,                  // When to start fade out
-			fadeOutDuration,               // Fade out duration
+				"[ambience_fade]volume=0.15:enable='gte(t,%.1f)'[ambience_ducked];"+
+				// Chime: delay and set volume
+				"[1:a]adelay=%d|%d,volume=0.6[chime_delayed];"+
+				// Intro: apply normalization to match dynamic TTS volume, then delay
+				// Boost by ~6dB to match dynamic TTS levels
+				"[2:a]volume=2.0,adelay=%d|%d[voice_delayed];"+
+				// Mix all three
+				"[ambience_ducked][chime_delayed][voice_delayed]amix=inputs=3:duration=longest:dropout_transition=0.5[mixed];"+
+				// Apply loudnorm for consistent output levels
+				"[mixed]loudnorm=I=-16:TP=-1.5:LRA=11[normalized];"+
+				// Fade out at the end
+				"[normalized]afade=t=out:st=%.1f:d=%.1f[out]",
+			fadeInDuration,       // Ambience fade in duration
+			voiceDelay,           // When to duck ambience
+			int(chimeDelay*1000), // Chime delay (ms)
+			int(chimeDelay*1000), // Chime delay for second channel
+			int(voiceDelay*1000), // Voice delay (ms)
+			int(voiceDelay*1000), // Voice delay for second channel
+			fadeOutStart,         // When to start fade out
+			fadeOutDuration,      // Fade out duration
 		),
 		"-map", "[out]",
 		"-t", fmt.Sprintf("%.2f", totalDuration),
@@ -216,7 +257,7 @@ func (eim *EnhancedIntroMixer) mixAudioComponents(ambiencePath, chimePath string
 		return nil, fmt.Errorf("failed to read mixed audio: %w", err)
 	}
 
-	fmt.Printf("[ENHANCED_INTRO] Successfully created intro with %s ambience (size: %d bytes)\n", 
+	fmt.Printf("[ENHANCED_INTRO] Successfully created intro with %s ambience and volume normalization (size: %d bytes)\n",
 		eim.selectedAmbience, len(mixedData))
 	return mixedData, nil
 }

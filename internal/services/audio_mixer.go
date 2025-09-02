@@ -52,7 +52,6 @@ func (am *AudioMixer) MixOutroWithMusic(voiceData []byte, musicType string) ([]b
 	musicFile := am.selectBackgroundMusic(musicType)
 	outputFile := filepath.Join(tempDir, fmt.Sprintf("outro_mixed_%d.mp3", time.Now().Unix()))
 
-
 	// Write voice data to temp file
 	if err := os.WriteFile(voiceFile, voiceData, 0644); err != nil {
 		fmt.Printf("[AUDIO_MIXER] Failed to write voice file: %v\n", err)
@@ -75,7 +74,6 @@ func (am *AudioMixer) MixOutroWithMusic(voiceData []byte, musicType string) ([]b
 		}
 		return voiceData, nil // Return voice only if no music available
 	}
-
 
 	// Mix audio using ffmpeg with simpler, more compatible settings:
 	// - Music at moderate volume
@@ -225,9 +223,9 @@ func (am *AudioMixer) MixOutroWithNatureSounds(voiceData []byte, birdSongData []
 
 	fmt.Printf("[AUDIO_MIXER] Files written, proceeding with mixing\n")
 
-	// Mix audio using ffmpeg:
+	// Mix audio using ffmpeg with volume normalization:
 	// - Bird song at 15% volume while voice is playing
-	// - Bird song at 40% volume after voice ends
+	// - Apply loudnorm for consistent levels with other tracks
 	// - Loop bird song if it's shorter than the outro
 	// - Fade in/out for smooth transitions
 	cmd := exec.Command("ffmpeg",
@@ -239,10 +237,11 @@ func (am *AudioMixer) MixOutroWithNatureSounds(voiceData []byte, birdSongData []
 		"[1:a]volume=0.15,afade=t=in:st=0:d=1[bird_quiet];"+ // Bird song at low volume
 			"[0:a]apad=whole_dur=30[voice];"+ // Pad voice to 30 seconds
 			"[voice][bird_quiet]amix=inputs=2:duration=longest[mixed];"+ // Mix them
-			"[mixed]afade=t=out:st=28:d=2[out]", // Fade out at end
+			"[mixed]loudnorm=I=-16:TP=-1.5:LRA=11[normalized];"+ // Apply normalization
+			"[normalized]afade=t=out:st=28:d=2[out]", // Fade out at end
 		"-map", "[out]",
 		"-c:a", "libmp3lame", // MP3 codec
-		"-b:a", "128k", // Bitrate
+		"-b:a", "192k", // Higher bitrate for better quality
 		"-y", // Overwrite output
 		outputFile,
 	)
@@ -263,6 +262,144 @@ func (am *AudioMixer) MixOutroWithNatureSounds(voiceData []byte, birdSongData []
 	}
 
 	fmt.Printf("[AUDIO_MIXER] Successfully mixed outro with bird song (size: %d bytes)\n", len(mixedData))
+	return mixedData, nil
+}
+
+// MixOutroWithAmbienceAndJingle mixes the outro voice with ambience and adds a ukulele jingle
+func (am *AudioMixer) MixOutroWithAmbienceAndJingle(voiceData []byte, ambienceData []byte, ambienceName string) ([]byte, error) {
+	fmt.Printf("[AUDIO_MIXER] Starting outro mixing with %s ambience and ukulele jingle\n", ambienceName)
+
+	// Check if ffmpeg is available
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		fmt.Printf("[AUDIO_MIXER] ffmpeg not found in PATH, returning voice only\n")
+		return voiceData, nil
+	}
+
+	// Create temp files for processing
+	tempDir := os.TempDir()
+	voiceFile := filepath.Join(tempDir, fmt.Sprintf("outro_voice_%d.mp3", time.Now().Unix()))
+	ambienceFile := filepath.Join(tempDir, fmt.Sprintf("outro_ambience_%d.mp3", time.Now().Unix()))
+	outputFile := filepath.Join(tempDir, fmt.Sprintf("outro_mixed_%d.mp3", time.Now().Unix()))
+
+	// Path to ukulele jingle
+	ukuleleFile := "sound_effects/chimes/ukulele_short.mp3"
+
+	fmt.Printf("[AUDIO_MIXER] Voice file: %s\n", voiceFile)
+	fmt.Printf("[AUDIO_MIXER] Ambience file: %s\n", ambienceFile)
+	fmt.Printf("[AUDIO_MIXER] Ukulele file: %s\n", ukuleleFile)
+	fmt.Printf("[AUDIO_MIXER] Output file: %s\n", outputFile)
+
+	// Write voice data to temp file
+	if err := os.WriteFile(voiceFile, voiceData, 0644); err != nil {
+		fmt.Printf("[AUDIO_MIXER] Failed to write voice file: %v\n", err)
+		return nil, fmt.Errorf("failed to write voice file: %w", err)
+	}
+	defer os.Remove(voiceFile)
+
+	// Write ambience data to temp file
+	if err := os.WriteFile(ambienceFile, ambienceData, 0644); err != nil {
+		fmt.Printf("[AUDIO_MIXER] Failed to write ambience file: %v\n", err)
+		os.Remove(voiceFile)
+		return nil, fmt.Errorf("failed to write ambience file: %w", err)
+	}
+	defer os.Remove(ambienceFile)
+	defer os.Remove(outputFile)
+
+	// Check if ukulele file exists
+	if _, err := os.Stat(ukuleleFile); err != nil {
+		fmt.Printf("[AUDIO_MIXER] Ukulele file not found: %s, mixing without jingle\n", ukuleleFile)
+		// Fall back to mixing without jingle
+		return am.mixOutroWithAmbienceOnly(voiceFile, ambienceFile, outputFile)
+	}
+
+	fmt.Printf("[AUDIO_MIXER] Files written, proceeding with mixing\n")
+
+	// Mix audio using ffmpeg with volume normalization:
+	// - Ambience at 15% volume while voice is playing
+	// - Fade out ambience 1-2 seconds faster after voice ends
+	// - Crossfade to ukulele jingle at the end
+	// - Apply loudnorm for consistent levels
+	cmd := exec.Command("ffmpeg",
+		"-i", voiceFile, // Input 0: voice
+		"-i", ambienceFile, // Input 1: ambience
+		"-i", ukuleleFile, // Input 2: ukulele jingle
+		"-filter_complex",
+		// Ambience: low volume during voice, fade out faster (1 second instead of 2)
+		"[1:a]volume=0.15,afade=t=in:st=0:d=1[ambience_low];"+
+			// Get voice duration for timing
+			"[0:a]apad=whole_dur=28[voice_padded];"+
+			// Mix voice with ambience
+			"[voice_padded][ambience_low]amix=inputs=2:duration=first:dropout_transition=1[voice_with_ambience];"+
+			// Prepare ukulele with delay (starts sooner after voice)
+			"[2:a]adelay=26500|26500,volume=0.8[ukulele_delayed];"+
+			// Fade out voice+ambience mix faster before ukulele
+			"[voice_with_ambience]afade=t=out:st=25.5:d=1[mix_fadeout];"+
+			// Overlay ukulele at the end
+			"[mix_fadeout][ukulele_delayed]amix=inputs=2:duration=longest[mixed];"+
+			// Apply normalization for consistent volume
+			"[mixed]loudnorm=I=-16:TP=-1.5:LRA=11[normalized];"+
+			// Final fade out
+			"[normalized]afade=t=out:st=29.5:d=1[out]",
+		"-map", "[out]",
+		"-t", "30", // Total duration reduced by 2 seconds
+		"-c:a", "libmp3lame", // MP3 codec
+		"-b:a", "192k", // Higher bitrate for better quality
+		"-y", // Overwrite output
+		outputFile,
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		// If ffmpeg fails, try simpler mixing
+		fmt.Printf("[AUDIO_MIXER] Complex mixing failed: %v\nStderr: %s\n", err, stderr.String())
+		fmt.Printf("[AUDIO_MIXER] Falling back to simpler mixing\n")
+		return am.mixOutroWithAmbienceOnly(voiceFile, ambienceFile, outputFile)
+	}
+
+	// Read the mixed audio
+	mixedData, err := os.ReadFile(outputFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read mixed audio: %w", err)
+	}
+
+	fmt.Printf("[AUDIO_MIXER] Successfully mixed outro with %s ambience and ukulele jingle (size: %d bytes)\n", ambienceName, len(mixedData))
+	return mixedData, nil
+}
+
+// mixOutroWithAmbienceOnly is a fallback for when ukulele is not available
+func (am *AudioMixer) mixOutroWithAmbienceOnly(voiceFile, ambienceFile, outputFile string) ([]byte, error) {
+	cmd := exec.Command("ffmpeg",
+		"-i", voiceFile, // Input: voice
+		"-i", ambienceFile, // Input: ambience
+		"-filter_complex",
+		"[1:a]volume=0.15,afade=t=in:st=0:d=1[ambience_low];"+
+			"[0:a]apad=whole_dur=30[voice_padded];"+
+			"[voice_padded][ambience_low]amix=inputs=2:duration=longest[mixed];"+
+			"[mixed]loudnorm=I=-16:TP=-1.5:LRA=11[normalized];"+
+			"[normalized]afade=t=out:st=28:d=2[out]",
+		"-map", "[out]",
+		"-t", "30",
+		"-c:a", "libmp3lame",
+		"-b:a", "192k",
+		"-y",
+		outputFile,
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("[AUDIO_MIXER] Fallback mixing failed: %v\n", err)
+		return nil, fmt.Errorf("fallback mixing failed: %w", err)
+	}
+
+	mixedData, err := os.ReadFile(outputFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read mixed audio: %w", err)
+	}
+
 	return mixedData, nil
 }
 

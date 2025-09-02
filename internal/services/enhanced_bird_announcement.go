@@ -35,7 +35,7 @@ func (eba *EnhancedBirdAnnouncement) GenerateAnnouncementWithAmbience(
 	// Generate TTS announcement with pauses for better cadence
 	// Spaced periods create effective pauses in ElevenLabs
 	announcementText := fmt.Sprintf("Today's bird is the %s! . . . Listen carefully to its unique song.", birdName)
-	
+
 	// Use narration manager for TTS
 	narrationManager := NewNarrationManager(os.Getenv("ELEVENLABS_API_KEY"))
 	narrationManager.selectedVoice = VoiceConfig{VoiceID: voiceID}
@@ -107,28 +107,32 @@ func (eba *EnhancedBirdAnnouncement) mixAnnouncementWithAmbience(ttsData []byte,
 	// Calculate timings
 	// Ambience continues from Track 1 at low volume (10-12%)
 	// Gradually fades out over the duration of the announcement
-	fadeInDuration := 0.5    // Quick fade in (ambience is already playing)
-	fadeOutStart := ttsDuration * 0.6  // Start fading at 60% through
-	fadeOutDuration := ttsDuration * 0.4  // Fade for remaining 40%
-	totalDuration := ttsDuration + 1.0  // Add 1 second of fade after voice
+	fadeInDuration := 0.5                // Quick fade in (ambience is already playing)
+	fadeOutStart := ttsDuration * 0.6    // Start fading at 60% through
+	fadeOutDuration := ttsDuration * 0.4 // Fade for remaining 40%
+	totalDuration := ttsDuration + 1.0   // Add 1 second of fade after voice
 
-	// Build ffmpeg command for mixing
+	// Build ffmpeg command for mixing with volume normalization
 	cmd := exec.Command("ffmpeg",
-		"-i", ambiencePath,  // Input: continuing ambience
-		"-i", ttsFile,       // Input: TTS announcement
+		"-i", ambiencePath, // Input: continuing ambience
+		"-i", ttsFile, // Input: TTS announcement
 		"-filter_complex",
 		fmt.Sprintf(
 			// Ambience: start at 10%% volume, fade out gradually
 			"[0:a]afade=t=in:st=0:d=%.1f,volume=0.10[ambience_low];"+
-			"[ambience_low]afade=t=out:st=%.1f:d=%.1f[ambience_fade];"+
-			// Mix voice with fading ambience
-			"[1:a][ambience_fade]amix=inputs=2:duration=first:dropout_transition=0.5[mixed];"+
-			// Final fade out
-			"[mixed]afade=t=out:st=%.1f:d=0.5[out]",
-			fadeInDuration,     // Quick fade in
-			fadeOutStart,       // When to start fade out
-			fadeOutDuration,    // Fade out duration
-			ttsDuration,        // Final fade start
+				"[ambience_low]afade=t=out:st=%.1f:d=%.1f[ambience_fade];"+
+				// Boost TTS volume to match intro levels (important for consistency)
+				"[1:a]volume=1.8[voice_boosted];"+
+				// Mix boosted voice with fading ambience
+				"[voice_boosted][ambience_fade]amix=inputs=2:duration=first:dropout_transition=0.5[mixed];"+
+				// Apply loudnorm for consistent levels with intro
+				"[mixed]loudnorm=I=-16:TP=-1.5:LRA=11[normalized];"+
+				// Final fade out
+				"[normalized]afade=t=out:st=%.1f:d=0.5[out]",
+			fadeInDuration,  // Quick fade in
+			fadeOutStart,    // When to start fade out
+			fadeOutDuration, // Fade out duration
+			ttsDuration,     // Final fade start
 		),
 		"-map", "[out]",
 		"-t", fmt.Sprintf("%.2f", totalDuration),
@@ -152,7 +156,7 @@ func (eba *EnhancedBirdAnnouncement) mixAnnouncementWithAmbience(ttsData []byte,
 		return nil, fmt.Errorf("failed to read mixed audio: %w", err)
 	}
 
-	fmt.Printf("[ENHANCED_ANNOUNCEMENT] Successfully created announcement with %s ambience (size: %d bytes)\n", 
+	fmt.Printf("[ENHANCED_ANNOUNCEMENT] Successfully created announcement with %s ambience and volume normalization (size: %d bytes)\n",
 		filepath.Base(ambiencePath), len(mixedData))
 	return mixedData, nil
 }
@@ -169,7 +173,7 @@ func (eba *EnhancedBirdAnnouncement) GenerateAnnouncementFromAudioData(
 	// Generate TTS announcement with pauses for better cadence
 	// Spaced periods create effective pauses in ElevenLabs
 	announcementText := fmt.Sprintf("Today's bird is the %s! . . . Listen carefully to its unique song.", birdName)
-	
+
 	// Use narration manager for TTS
 	narrationManager := NewNarrationManager(os.Getenv("ELEVENLABS_API_KEY"))
 	narrationManager.selectedVoice = VoiceConfig{VoiceID: voiceID}
