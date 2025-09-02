@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"strconv"
 	"strings"
 	"time"
 
@@ -186,10 +187,11 @@ func (fg *ImprovedFactGeneratorV4) generateLocationIntro(bird *models.Bird, cont
 
 	mostRecent := context.RecentSightings[0]
 
+	// Create kid-friendly location introductions without confusing street details
 	intros := []string{
 		fmt.Sprintf("Great news! %ss have been spotted near you in %s!", bird.CommonName, context.CityName),
-		fmt.Sprintf("You're in luck! A %s was seen just %d days ago at %s!", bird.CommonName, mostRecent.DaysAgo, mostRecent.LocationName),
-		fmt.Sprintf("Exciting! %ss are active in your area - one was spotted at %s recently!", bird.CommonName, mostRecent.LocationName),
+		fmt.Sprintf("You're in luck! A %s was seen just %d days ago near you!", bird.CommonName, mostRecent.DaysAgo),
+		fmt.Sprintf("Exciting! %ss are active in your area!", bird.CommonName),
 		fmt.Sprintf("Perfect timing! %ss have been seen %d times near %s this month!", bird.CommonName, len(context.RecentSightings), context.CityName),
 	}
 
@@ -289,17 +291,18 @@ func (fg *ImprovedFactGeneratorV4) generateRecentSightingsInfo(bird *models.Bird
 			fmt.Sprintf("Wow! %ss have been spotted %d times in your area this month!", bird.CommonName, thisMonth))
 	}
 
-	// Mention specific interesting locations
+	// Mention group sightings without confusing location details
 	for _, sighting := range context.RecentSightings[:min(3, len(context.RecentSightings))] {
 		if sighting.Count > 1 {
 			sightingPhrases = append(sightingPhrases,
-				fmt.Sprintf("Someone saw %d %ss together at %s!", sighting.Count, bird.CommonName, sighting.LocationName))
+				fmt.Sprintf("Someone saw %d %ss together in your neighborhood!", sighting.Count, bird.CommonName))
 			break
 		}
 	}
 
 	if len(sightingPhrases) > 0 {
-		return "Local bird alert! " + sightingPhrases[fg.rng.Intn(len(sightingPhrases))]
+		// Add pauses before and after "Local bird alert!" using spaced periods
+		return ". . . Local bird alert! . . . " + sightingPhrases[fg.rng.Intn(len(sightingPhrases))]
 	}
 
 	return ""
@@ -309,12 +312,28 @@ func (fg *ImprovedFactGeneratorV4) generateRecentSightingsInfo(bird *models.Bird
 func (fg *ImprovedFactGeneratorV4) generateLocalConservationInfo(bird *models.Bird, context LocationContext) string {
 	base := fg.generateConservationInfo(bird)
 
-	// Add local conservation actions
-	localActions := []string{
-		fmt.Sprintf("Join the %s Audubon Society to help protect %ss!", context.StateName, bird.CommonName),
-		fmt.Sprintf("Report your %s sightings to eBird to help scientists!", bird.CommonName),
-		fmt.Sprintf("Participate in the %s Bird Count to track local populations!", context.CityName),
-		"Create a bird-friendly yard with native plants and fresh water!",
+	// Add local conservation actions based on whether we have actual location
+	var localActions []string
+	
+	hasActualState := context.StateName != "your state" && context.StateName != ""
+	hasActualCity := context.CityName != "your city" && context.CityName != ""
+	
+	if hasActualState && hasActualCity {
+		// Use specific location names
+		localActions = []string{
+			fmt.Sprintf("Join the %s Audubon Society to help protect %ss!", context.StateName, bird.CommonName),
+			fmt.Sprintf("Report your %s sightings to eBird to help scientists!", bird.CommonName),
+			fmt.Sprintf("Participate in the %s Bird Count to track local populations!", context.CityName),
+			"Create a bird-friendly yard with native plants and fresh water!",
+		}
+	} else {
+		// Use generic phrasing
+		localActions = []string{
+			fmt.Sprintf("Join your local Audubon Society to help protect %ss!", bird.CommonName),
+			fmt.Sprintf("Report your %s sightings to eBird to help scientists!", bird.CommonName),
+			"Participate in your local Bird Count to track populations!",
+			"Create a bird-friendly yard with native plants and fresh water!",
+		}
 	}
 
 	if strings.Contains(base, "help") {
@@ -327,14 +346,34 @@ func (fg *ImprovedFactGeneratorV4) generateLocalConservationInfo(bird *models.Bi
 // Helper functions for location
 
 func (fg *ImprovedFactGeneratorV4) getCityFromCoordinates(lat, lng float64) string {
-	// This would normally call a geocoding API
-	// For now, return a placeholder that can be replaced with actual implementation
+	// If coordinates are zero, return generic text
+	if lat == 0 && lng == 0 {
+		return "your city"
+	}
+	
+	// Use reverse geocoding to get actual city name
+	cityName := fg.reverseGeocode(lat, lng, "city")
+	if cityName != "" {
+		return cityName
+	}
+	
+	// Fallback to generic
 	return "your city"
 }
 
 func (fg *ImprovedFactGeneratorV4) getStateFromCoordinates(lat, lng float64) string {
-	// This would normally call a geocoding API or use a lookup table
-	// For now, return a placeholder
+	// If coordinates are zero, return generic text
+	if lat == 0 && lng == 0 {
+		return "your state"
+	}
+	
+	// Use reverse geocoding to get actual state name
+	stateName := fg.reverseGeocode(lat, lng, "state")
+	if stateName != "" {
+		return stateName
+	}
+	
+	// Fallback to generic
 	return "your state"
 }
 
@@ -352,6 +391,163 @@ func (fg *ImprovedFactGeneratorV4) calculateDistance(lat1, lng1, lat2, lng2 floa
 	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
 
 	return earthRadius * c
+}
+
+func (fg *ImprovedFactGeneratorV4) reverseGeocode(lat, lng float64, locationType string) string {
+	// Use eBird hotspots to get location names
+	// This is a simplified approach using nearby eBird hotspot names
+	hotspots, err := fg.ebirdClient.GetNearbyHotspots(lat, lng, 25)
+	if err != nil || len(hotspots) == 0 {
+		return ""
+	}
+	
+	// Collect city and state names, filtering out street-level details
+	cities := make(map[string]int)
+	states := make(map[string]int)
+	
+	for _, hotspot := range hotspots {
+		parts := strings.Split(hotspot.LocationName, ", ")
+		if len(parts) >= 2 {
+			// Last part is usually state (or country)
+			statePart := strings.TrimSpace(parts[len(parts)-1])
+			// Clean the state name to remove dates/years
+			statePart = cleanLocationName(statePart)
+			
+			// Filter out common state abbreviations and full names
+			if statePart != "" && isValidState(statePart) {
+				states[statePart]++
+			}
+			
+			// Look for city name - usually second to last, but skip if it contains street indicators
+			if len(parts) >= 2 {
+				cityPart := strings.TrimSpace(parts[len(parts)-2])
+				// Clean the city name to remove dates/years
+				cityPart = cleanLocationName(cityPart)
+				
+				// Skip if it looks like a street address
+				if cityPart != "" && !containsStreetIndicators(cityPart) && !containsNumbers(cityPart) {
+					cities[cityPart]++
+				} else if len(parts) >= 3 {
+					// Try third to last if second to last was a street
+					cityPart = strings.TrimSpace(parts[len(parts)-3])
+					// Clean the city name to remove dates/years
+					cityPart = cleanLocationName(cityPart)
+					if cityPart != "" && !containsStreetIndicators(cityPart) && !containsNumbers(cityPart) {
+						cities[cityPart]++
+					}
+				}
+			}
+		}
+	}
+	
+	// Return the most common city or state
+	if locationType == "state" {
+		return getMostCommon(states)
+	} else if locationType == "city" {
+		return getMostCommon(cities)
+	}
+	
+	return ""
+}
+
+// Helper function to check if string contains street indicators
+func containsStreetIndicators(s string) bool {
+	streetWords := []string{"St", "Street", "Ave", "Avenue", "Rd", "Road", "Blvd", 
+		"Boulevard", "Dr", "Drive", "Ln", "Lane", "Way", "Ct", "Court", 
+		"Pl", "Place", "Block", "Park", "Trail", "Path"}
+	lower := strings.ToLower(s)
+	for _, word := range streetWords {
+		if strings.Contains(lower, strings.ToLower(word)) {
+			return true
+		}
+	}
+	return false
+}
+
+// Helper function to check if string contains numbers (likely address)
+func containsNumbers(s string) bool {
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			return true
+		}
+	}
+	return false
+}
+
+// Helper function to clean location names by removing dates/years
+func cleanLocationName(s string) string {
+	// Remove common year patterns (4-digit numbers)
+	words := strings.Fields(s)
+	var cleaned []string
+	
+	for _, word := range words {
+		// Skip if it's a 4-digit year (1900-2099)
+		if len(word) == 4 {
+			if year, err := strconv.Atoi(word); err == nil && year >= 1900 && year <= 2099 {
+				continue
+			}
+		}
+		
+		// Skip if it contains date patterns like "2023-01-15" or "01/15/2023"
+		if strings.Contains(word, "-") || strings.Contains(word, "/") {
+			hasOnlyNumbersAndSeparators := true
+			for _, r := range word {
+				if !((r >= '0' && r <= '9') || r == '-' || r == '/') {
+					hasOnlyNumbersAndSeparators = false
+					break
+				}
+			}
+			if hasOnlyNumbersAndSeparators {
+				continue
+			}
+		}
+		
+		cleaned = append(cleaned, word)
+	}
+	
+	return strings.Join(cleaned, " ")
+}
+
+// Helper function to validate state names/abbreviations
+func isValidState(s string) bool {
+	// Common US state abbreviations and some full names
+	// This is a simplified check - could be expanded
+	if len(s) == 2 {
+		// Likely a state abbreviation
+		return true
+	}
+	
+	// Check for common state name patterns
+	stateNames := []string{"California", "Oregon", "Washington", "Texas", "Florida", 
+		"New York", "Colorado", "Arizona", "Nevada", "Utah", "Idaho", "Montana"}
+	
+	for _, state := range stateNames {
+		if strings.EqualFold(s, state) {
+			return true
+		}
+	}
+	
+	return len(s) > 2 && len(s) < 20 // Reasonable length for a state name
+}
+
+// Helper function to get most common item from map
+func getMostCommon(items map[string]int) string {
+	if len(items) == 0 {
+		return ""
+	}
+	
+	var mostCommon string
+	maxCount := 0
+	
+	for item, count := range items {
+		if count > maxCount {
+			maxCount = count
+			mostCommon = item
+		}
+	}
+	
+	// Clean the final result one more time to ensure no dates/years
+	return cleanLocationName(mostCommon)
 }
 
 func (fg *ImprovedFactGeneratorV4) determineSeasonalPresence(sightings []RecentSighting) string {
@@ -396,12 +592,28 @@ func (fg *ImprovedFactGeneratorV4) joinSectionsNaturally(sections []string, bird
 	result := strings.Join(sections, " ")
 	result = strings.ReplaceAll(result, "  ", " ")
 
-	// Location-aware closings
-	closings := []string{
-		fmt.Sprintf(" Now you're a %s expert! Look for one in %s today!", birdName, context.CityName),
-		fmt.Sprintf(" Keep watching for %ss around %s - you might be the next to spot one!", birdName, context.CityName),
-		fmt.Sprintf(" The %s is waiting to be discovered in %s! Happy bird watching!", birdName, context.CityName),
-		fmt.Sprintf(" Now go explore %s and find a %s!", context.CityName, birdName),
+	// Location-aware closings with proper grammar for actual vs generic locations
+	var closings []string
+	
+	// Check if we have actual location names or generic ones
+	hasActualLocation := context.CityName != "your city" && context.CityName != ""
+	
+	if hasActualLocation {
+		// Use specific location names when available
+		closings = []string{
+			fmt.Sprintf(" Now you're a %s expert! Look for one in %s today!", birdName, context.CityName),
+			fmt.Sprintf(" Keep watching for %ss around %s - you might be the next to spot one!", birdName, context.CityName),
+			fmt.Sprintf(" The %s is waiting to be discovered in %s! Happy bird watching!", birdName, context.CityName),
+			fmt.Sprintf(" Now go explore %s and find a %s!", context.CityName, birdName),
+		}
+	} else {
+		// Use generic phrasing when location is unknown
+		closings = []string{
+			fmt.Sprintf(" Now you're a %s expert! Look for one in your city today!", birdName),
+			fmt.Sprintf(" Keep watching for %ss in your neighborhood - you might be the next to spot one!", birdName),
+			fmt.Sprintf(" The %s is waiting to be discovered near you! Happy bird watching!", birdName),
+			fmt.Sprintf(" Now go explore your area and find a %s!", birdName),
+		}
 	}
 
 	if len(context.RecentSightings) > 0 {
