@@ -1,8 +1,10 @@
 package services
 
 import (
+	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 )
@@ -26,17 +28,17 @@ func NewOutroIntegration() *OutroIntegration {
 	}
 }
 
-// GenerateOutroWithBirdSong creates the complete outro track
-func (oi *OutroIntegration) GenerateOutroWithBirdSong(
+// GenerateOutroWithAmbience creates the complete outro track with ambient sounds
+func (oi *OutroIntegration) GenerateOutroWithAmbience(
 	voiceName string,
 	dayOfWeek time.Weekday,
-	birdSongData []byte,
+	ambienceData []byte,
 	baseURL string,
 ) ([]byte, error) {
 	
 	if !oi.useStatic {
 		// Fall back to dynamic TTS generation (old method)
-		return oi.generateDynamicOutro(voiceName, dayOfWeek, birdSongData)
+		return oi.generateDynamicOutro(voiceName, dayOfWeek, ambienceData)
 	}
 	
 	// Get the pre-recorded outro file path
@@ -53,20 +55,22 @@ func (oi *OutroIntegration) GenerateOutroWithBirdSong(
 	
 	fmt.Printf("[OUTRO] Using pre-recorded outro: %s\n", filepath.Base(outroPath))
 	
-	// Mix with bird song if available
-	if birdSongData != nil && len(birdSongData) > 0 {
-		fmt.Printf("[OUTRO] Mixing with bird song (%d bytes)\n", len(birdSongData))
-		mixedAudio, err := oi.audioMixer.MixOutroWithNatureSounds(outroData, birdSongData)
+	// Mix with ambient sounds if available
+	if ambienceData != nil && len(ambienceData) > 0 {
+		fmt.Printf("[OUTRO] Mixing with ambient sounds (%d bytes)\n", len(ambienceData))
+		mixedAudio, err := oi.mixOutroWithAmbience(outroData, ambienceData)
 		if err != nil {
-			fmt.Printf("[OUTRO] Mixing failed, using outro only: %v\n", err)
-			return outroData, nil
+			fmt.Printf("[OUTRO] Mixing failed, applying volume boost only: %v\n", err)
+			// Apply volume boost even if mixing fails
+			return oi.applyVolumeBoost(outroData)
 		}
-		fmt.Printf("[OUTRO] Successfully mixed outro with bird song\n")
+		fmt.Printf("[OUTRO] Successfully mixed outro with ambient sounds\n")
 		return mixedAudio, nil
 	}
 	
-	// Return outro without bird song if none available
-	return outroData, nil
+	// Apply volume boost to match intro track even without ambient sounds
+	fmt.Printf("[OUTRO] No ambient sounds, applying volume boost to outro\n")
+	return oi.applyVolumeBoost(outroData)
 }
 
 // getStaticOutroPath selects the appropriate pre-recorded outro file
@@ -111,7 +115,7 @@ func (oi *OutroIntegration) getOutroType(dayOfWeek time.Weekday) string {
 }
 
 // generateDynamicOutro is the fallback to TTS generation (old method)
-func (oi *OutroIntegration) generateDynamicOutro(voiceName string, dayOfWeek time.Weekday, birdSongData []byte) ([]byte, error) {
+func (oi *OutroIntegration) generateDynamicOutro(voiceName string, dayOfWeek time.Weekday, ambienceData []byte) ([]byte, error) {
 	// This would call the original TTS-based outro generation
 	// Kept as fallback if needed
 	return nil, fmt.Errorf("dynamic outro generation not implemented - use static outros")
@@ -154,4 +158,116 @@ func (oi *OutroIntegration) ValidateOutros() error {
 	
 	fmt.Println("✅ All outro files validated successfully!")
 	return nil
+}
+
+// applyVolumeBoost applies a 2.2x volume boost to match the intro track
+func (oi *OutroIntegration) applyVolumeBoost(audioData []byte) ([]byte, error) {
+	// Check if ffmpeg is available
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		fmt.Printf("[OUTRO] ffmpeg not found, returning original audio\n")
+		return audioData, nil
+	}
+
+	// Create temp files
+	tempDir := os.TempDir()
+	inputFile := filepath.Join(tempDir, fmt.Sprintf("outro_input_%d.mp3", time.Now().Unix()))
+	outputFile := filepath.Join(tempDir, fmt.Sprintf("outro_boosted_%d.mp3", time.Now().Unix()))
+
+	// Write input data
+	if err := os.WriteFile(inputFile, audioData, 0644); err != nil {
+		return audioData, nil
+	}
+	defer os.Remove(inputFile)
+	defer os.Remove(outputFile)
+
+	// Apply volume boost to match intro (2.2x)
+	cmd := exec.Command("ffmpeg",
+		"-i", inputFile,
+		"-filter_complex",
+		"[0:a]volume=2.2[boosted]",
+		"-map", "[boosted]",
+		"-c:a", "libmp3lame",
+		"-b:a", "192k",
+		"-ar", "44100",
+		"-y",
+		outputFile,
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("[OUTRO] Volume boost failed: %v\n", err)
+		return audioData, nil
+	}
+
+	// Read the boosted audio
+	boostedData, err := os.ReadFile(outputFile)
+	if err != nil {
+		return audioData, nil
+	}
+
+	fmt.Printf("[OUTRO] Successfully applied 2.2x volume boost\n")
+	return boostedData, nil
+}
+
+// mixOutroWithAmbience mixes the outro with ambient sounds at 15% volume
+func (oi *OutroIntegration) mixOutroWithAmbience(outroData []byte, ambienceData []byte) ([]byte, error) {
+	// Check if ffmpeg is available
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return oi.applyVolumeBoost(outroData)
+	}
+
+	// Create temp files
+	tempDir := os.TempDir()
+	outroFile := filepath.Join(tempDir, fmt.Sprintf("outro_voice_%d.mp3", time.Now().Unix()))
+	ambienceFile := filepath.Join(tempDir, fmt.Sprintf("ambience_%d.mp3", time.Now().Unix()))
+	outputFile := filepath.Join(tempDir, fmt.Sprintf("outro_mixed_%d.mp3", time.Now().Unix()))
+
+	// Write files
+	if err := os.WriteFile(outroFile, outroData, 0644); err != nil {
+		return oi.applyVolumeBoost(outroData)
+	}
+	defer os.Remove(outroFile)
+
+	if err := os.WriteFile(ambienceFile, ambienceData, 0644); err != nil {
+		return oi.applyVolumeBoost(outroData)
+	}
+	defer os.Remove(ambienceFile)
+	defer os.Remove(outputFile)
+
+	// Mix with ambient sounds at 15% (matching intro) and apply 2.2x boost to voice
+	cmd := exec.Command("ffmpeg",
+		"-i", outroFile,
+		"-stream_loop", "-1",
+		"-i", ambienceFile,
+		"-t", "30",
+		"-filter_complex",
+		"[1:a]volume=0.15,afade=t=in:st=0:d=1[ambience_quiet];"+
+			"[0:a]volume=2.2,apad=whole_dur=30[voice_boosted];"+
+			"[voice_boosted][ambience_quiet]amix=inputs=2:duration=longest[mixed];"+
+			"[mixed]afade=t=out:st=28:d=2[out]",
+		"-map", "[out]",
+		"-c:a", "libmp3lame",
+		"-b:a", "192k",
+		"-y",
+		outputFile,
+	)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("[OUTRO] Mixing failed: %v\nStderr: %s\n", err, stderr.String())
+		return oi.applyVolumeBoost(outroData)
+	}
+
+	// Read the mixed audio
+	mixedData, err := os.ReadFile(outputFile)
+	if err != nil {
+		return oi.applyVolumeBoost(outroData)
+	}
+
+	fmt.Printf("[OUTRO] Successfully mixed with ambient sounds and applied volume boost\n")
+	return mixedData, nil
 }
