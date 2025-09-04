@@ -84,9 +84,9 @@ func (ac *AudioCombiner) generateBirdAnnouncement(birdName string, voiceID strin
 		"text":     text,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.3,  // Lower for more emotional range
+			"stability":        0.25, // Very low for maximum emotional range
 			"similarity_boost": 0.85, // High similarity to original voice
-			"speed":            0.92, // Good pace for kids
+			"speed":            0.95, // Faster, more energetic pace
 			"use_speaker_boost": true, // Enhance voice clarity
 		},
 	}

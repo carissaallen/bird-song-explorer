@@ -84,7 +84,7 @@ func (om *OutroManager) getJokeOutro(birdName string) string {
 		joke = om.generalJokes[rand.Intn(len(om.generalJokes))]
 	}
 
-	return fmt.Sprintf("Here's today's giggle before you go! %s See you tomorrow for another amazing bird adventure, explorers!", joke)
+	return fmt.Sprintf("Here's today's giggle before you go! <break time=\"0.5s\" /> %s <break time=\"1.0s\" /> See you tomorrow for another amazing bird adventure, explorers!", joke)
 }
 
 // getWisdomOutro returns a wisdom/inspirational outro
@@ -92,12 +92,12 @@ func (om *OutroManager) getWisdomOutro(birdName string) string {
 	rand.Seed(time.Now().UnixNano())
 	wisdom := om.wisdomQuotes[rand.Intn(len(om.wisdomQuotes))]
 
-	return fmt.Sprintf("Remember, little explorers: %s Think of our %s friend today and remember to spread your wings! Until tomorrow!", wisdom, birdName)
+	return fmt.Sprintf("Remember, little explorers: <break time=\"0.5s\" /> %s <break time=\"1.0s\" /> Think of our %s friend today and remember to spread your wings! <break time=\"0.5s\" /> Until tomorrow!", wisdom, birdName)
 }
 
 // getTeaserOutro returns a tomorrow teaser outro
 func (om *OutroManager) getTeaserOutro(birdName string) string {
-	return fmt.Sprintf("Wow, wasn't the %s amazing? Tomorrow we'll meet another incredible feathered friend! Will it be big or small? Colorful or camouflaged? You'll have to come back to find out! Keep your ears open for bird songs today, explorers!", birdName)
+	return fmt.Sprintf("Wow, wasn't the %s amazing? <break time=\"0.5s\" /> Tomorrow we'll meet another incredible feathered friend! <break time=\"0.5s\" /> Will it be big or small? <break time=\"0.3s\" /> Colorful or camouflaged? <break time=\"0.5s\" /> You'll have to come back to find out! <break time=\"0.5s\" /> Keep your ears open for bird songs today, explorers!", birdName)
 }
 
 // getChallengeOutro returns an interactive challenge outro
@@ -112,7 +112,7 @@ func (om *OutroManager) getChallengeOutro(birdName string) string {
 	rand.Seed(time.Now().UnixNano())
 	challenge := challenges[rand.Intn(len(challenges))]
 
-	return fmt.Sprintf("Your Bird Explorer Challenge: %s Tomorrow, we'll learn about a new bird together. Happy exploring!", challenge)
+	return fmt.Sprintf("Your Bird Explorer Challenge: <break time=\"0.5s\" /> %s <break time=\"1.0s\" /> Tomorrow, we'll learn about a new bird together. <break time=\"0.5s\" /> Happy exploring!", challenge)
 }
 
 // getFunFactOutro returns a fun fact outro
@@ -120,7 +120,7 @@ func (om *OutroManager) getFunFactOutro(birdName string) string {
 	rand.Seed(time.Now().UnixNano())
 	fact := om.funFacts[rand.Intn(len(om.funFacts))]
 
-	return fmt.Sprintf("Before you go, did you know? %s Amazing, right? Sweet dreams, and tomorrow we'll discover another incredible bird together!", fact)
+	return fmt.Sprintf("Before you go, did you know? <break time=\"0.5s\" /> %s <break time=\"1.0s\" /> Amazing, right? <break time=\"0.5s\" /> Sweet dreams, and tomorrow we'll discover another incredible bird together!", fact)
 }
 
 // getSeasonalAddition returns a seasonal message based on the current time of year

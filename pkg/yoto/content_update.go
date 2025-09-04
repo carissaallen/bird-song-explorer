@@ -544,16 +544,15 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 		)
 		if err == nil {
 			// Store the announcement text for transitions
-			cm.lastAnnouncementText = fmt.Sprintf("Today's bird is the %s! . . . Listen carefully to its unique song.", birdName)
+			cm.lastAnnouncementText = fmt.Sprintf("Today's bird is the %s! <break time=\"1.0s\" /> Listen carefully to its unique song.", birdName)
 			return announcementData, nil
 		}
 		// Fall through to standard generation if enhanced fails
 	}
 
-	// Add pauses between sentences using spaced periods and em dash
-	// ElevenLabs responds better to punctuation than line breaks
-	// Spaced periods (. . .) create a longer pause for emphasis
-	announcement := fmt.Sprintf("Today's bird is the %s! . . . Listen carefully to its unique song.", birdName)
+	// Add pauses between sentences using ElevenLabs break syntax
+	// The <break time="1.0s" /> syntax creates natural pauses that the AI understands
+	announcement := fmt.Sprintf("Today's bird is the %s! <break time=\"1.0s\" /> Listen carefully to its unique song.", birdName)
 
 	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
@@ -562,9 +561,9 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 		"text":     announcement,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.3,  // Lower for more emotional range
+			"stability":        0.25, // Very low for maximum emotional range
 			"similarity_boost": 0.85, // High similarity to original voice
-			"speed":            0.92, // Good pace for kids
+			"speed":            0.95, // Faster, more energetic pace
 			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		"previous_text": cm.lastIntroText,
@@ -720,9 +719,9 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		return nil, fmt.Errorf("voice ID is required for description generation")
 	}
 
-	// Add pauses between sentences for better cadence
-	// Use spaced periods and em dash for effective pausing
-	descriptionText := fmt.Sprintf("Did you know? . . . %s . . . Isn't that amazing? — Nature is full of wonderful surprises!", description)
+	// Add pauses between sentences for better cadence using break syntax
+	// The <break time="1.0s" /> creates natural pauses the AI understands
+	descriptionText := fmt.Sprintf("Did you know? <break time=\"1.0s\" /> %s <break time=\"1.0s\" /> Isn't that amazing? <break time=\"0.5s\" /> Nature is full of wonderful surprises!", description)
 
 	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
@@ -731,9 +730,9 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		"text":     descriptionText,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.3,  // Lower for more emotional range
+			"stability":        0.25, // Very low for maximum emotional range
 			"similarity_boost": 0.85, // High similarity to original voice
-			"speed":            0.92, // Good pace for kids
+			"speed":            0.95, // Faster, more energetic pace
 			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		// Add previous_text from Track 2 (announcement) for smooth transition
@@ -826,9 +825,9 @@ func (cm *ContentManager) generateEnhancedBirdDescription(description string, bi
 		"text":     enhancedScript,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.3,  // Lower for more emotional range
+			"stability":        0.25, // Very low for maximum emotional range
 			"similarity_boost": 0.85, // High similarity to original voice
-			"speed":            0.92, // Good pace for kids
+			"speed":            0.95, // Faster, more energetic pace
 			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		// Add previous_text from Track 2 (announcement) for smooth transition
