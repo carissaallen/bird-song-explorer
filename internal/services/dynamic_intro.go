@@ -100,7 +100,7 @@ func (dig *DynamicIntroGenerator) generateSpeech(text string, voiceID string) ([
 		"text":     text,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.5,  // Balanced emotional range
+			"stability":        0.3,  // Lower for more emotional range
 			"similarity_boost": 0.85, // High similarity to original voice
 			"speed":            0.92, // Good pace for kids
 			"use_speaker_boost": true, // Enhance voice clarity

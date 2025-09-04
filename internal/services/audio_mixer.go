@@ -237,8 +237,7 @@ func (am *AudioMixer) MixOutroWithNatureSounds(voiceData []byte, birdSongData []
 		"[1:a]volume=0.15,afade=t=in:st=0:d=1[bird_quiet];"+ // Bird song at low volume
 			"[0:a]apad=whole_dur=30[voice];"+ // Pad voice to 30 seconds
 			"[voice][bird_quiet]amix=inputs=2:duration=longest[mixed];"+ // Mix them
-			"[mixed]loudnorm=I=-16:TP=-1.5:LRA=11[normalized];"+ // Apply normalization
-			"[normalized]afade=t=out:st=28:d=2[out]", // Fade out at end
+			"[mixed]afade=t=out:st=28:d=2[out]", // Fade out at end - no loudnorm to preserve dynamics
 		"-map", "[out]",
 		"-c:a", "libmp3lame", // MP3 codec
 		"-b:a", "192k", // Higher bitrate for better quality
@@ -336,10 +335,8 @@ func (am *AudioMixer) MixOutroWithAmbienceAndJingle(voiceData []byte, ambienceDa
 			"[voice_with_ambience]afade=t=out:st=25.5:d=1[mix_fadeout];"+
 			// Overlay ukulele at the end
 			"[mix_fadeout][ukulele_delayed]amix=inputs=2:duration=longest[mixed];"+
-			// Apply normalization for consistent volume
-			"[mixed]loudnorm=I=-16:TP=-1.5:LRA=11[normalized];"+
-			// Final fade out
-			"[normalized]afade=t=out:st=29.5:d=1[out]",
+			// Final fade out - no loudnorm to preserve dynamics
+			"[mixed]afade=t=out:st=29.5:d=1[out]",
 		"-map", "[out]",
 		"-t", "30", // Total duration reduced by 2 seconds
 		"-c:a", "libmp3lame", // MP3 codec
@@ -377,8 +374,7 @@ func (am *AudioMixer) mixOutroWithAmbienceOnly(voiceFile, ambienceFile, outputFi
 		"[1:a]volume=0.15,afade=t=in:st=0:d=1[ambience_low];"+
 			"[0:a]apad=whole_dur=30[voice_padded];"+
 			"[voice_padded][ambience_low]amix=inputs=2:duration=longest[mixed];"+
-			"[mixed]loudnorm=I=-16:TP=-1.5:LRA=11[normalized];"+
-			"[normalized]afade=t=out:st=28:d=2[out]",
+			"[mixed]afade=t=out:st=28:d=2[out]", // No loudnorm to preserve dynamics
 		"-map", "[out]",
 		"-t", "30",
 		"-c:a", "libmp3lame",

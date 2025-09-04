@@ -222,10 +222,8 @@ func (eim *EnhancedIntroMixer) mixAudioComponentsWithNormalization(ambiencePath,
 				"[2:a]volume=2.0,adelay=%d|%d[voice_delayed];"+
 				// Mix all three
 				"[ambience_ducked][chime_delayed][voice_delayed]amix=inputs=3:duration=longest:dropout_transition=0.5[mixed];"+
-				// Apply loudnorm for consistent output levels
-				"[mixed]loudnorm=I=-16:TP=-1.5:LRA=11[normalized];"+
-				// Fade out at the end
-				"[normalized]afade=t=out:st=%.1f:d=%.1f[out]",
+				// Fade out at the end - no loudnorm to preserve dynamics
+				"[mixed]afade=t=out:st=%.1f:d=%.1f[out]",
 			fadeInDuration,       // Ambience fade in duration
 			voiceDelay,           // When to duck ambience
 			int(chimeDelay*1000), // Chime delay (ms)
