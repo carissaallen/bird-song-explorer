@@ -719,9 +719,9 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		return nil, fmt.Errorf("voice ID is required for description generation")
 	}
 
-	// Add pauses between sentences for better cadence using break syntax
-	// The <break time="1.0s" /> creates natural pauses the AI understands
-	descriptionText := fmt.Sprintf("Did you know? <break time=\"1.0s\" /> %s <break time=\"1.0s\" /> Isn't that amazing? <break time=\"0.5s\" /> Nature is full of wonderful surprises!", description)
+	// Add minimal pauses for better cadence
+	// Too many breaks can cause audio artifacts
+	descriptionText := fmt.Sprintf("Did you know? <break time=\"1.0s\" /> %s <break time=\"1.0s\" /> Isn't that amazing? Nature is full of wonderful surprises!", description)
 
 	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
