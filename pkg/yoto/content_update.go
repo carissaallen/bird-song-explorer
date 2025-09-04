@@ -562,10 +562,10 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 		"text":     announcement,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.75,
-			"similarity_boost": 0.75,
-			"style":            0.5,
-			"speed":            0.90, // Slower speed for kids (90% of normal)
+			"stability":        0.5,  // Balanced emotional range
+			"similarity_boost": 0.85, // High similarity to original voice
+			"speed":            0.92, // Good pace for kids
+			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		"previous_text": cm.lastIntroText,
 	}
@@ -639,10 +639,9 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 		"text":     outroText,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":         0.75,
-			"similarity_boost":  0.75,
-			"speed":             0.88, // Even slower for goodbye message
-			"style":             0.5,  // Add more style/emotion
+			"stability":         0.5,  // Balanced emotional range
+			"similarity_boost":  0.85, // High similarity to original voice
+			"speed":             0.92, // Good pace for goodbye
 			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		"previous_text": previousText,
@@ -732,10 +731,10 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		"text":     descriptionText,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.75,
-			"similarity_boost": 0.75,
-			"style":            0.5,
-			"speed":            0.90, // Slower speed for kids (90% of normal)
+			"stability":        0.5,  // Balanced emotional range
+			"similarity_boost": 0.85, // High similarity to original voice
+			"speed":            0.92, // Good pace for kids
+			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		// Add previous_text from Track 2 (announcement) for smooth transition
 		"previous_text": cm.lastAnnouncementText,
@@ -827,10 +826,10 @@ func (cm *ContentManager) generateEnhancedBirdDescription(description string, bi
 		"text":     enhancedScript,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.75,
-			"similarity_boost": 0.75,
-			"style":            0.5,
-			"speed":            0.90, // Slower speed for kids (90% of normal)
+			"stability":        0.5,  // Balanced emotional range
+			"similarity_boost": 0.85, // High similarity to original voice
+			"speed":            0.92, // Good pace for kids
+			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		// Add previous_text from Track 2 (announcement) for smooth transition
 		"previous_text": cm.lastAnnouncementText,

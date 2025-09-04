@@ -45,11 +45,11 @@ func (s *TTSService) generateElevenLabsAudio(text string) ([]byte, error) {
 	payload := map[string]interface{}{
 		"text":     text,
 		"model_id": "eleven_monolingual_v1",
-		"voice_settings": map[string]float64{
-			"stability":        0.75,
-			"similarity_boost": 0.75,
-			"style":            0.5,
-			"speed":            0.90, // Slower speed for kids (90% of normal)
+		"voice_settings": map[string]interface{}{
+			"stability":        0.5,  // Balanced emotional range
+			"similarity_boost": 0.85, // High similarity to original voice
+			"speed":            0.92, // Good pace for kids
+			"use_speaker_boost": true, // Enhance voice clarity
 		},
 	}
 
