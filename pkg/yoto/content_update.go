@@ -561,10 +561,9 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 		"text":     announcement,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.25, // Very low for maximum emotional range
-			"similarity_boost": 0.85, // High similarity to original voice
+			"stability":        0.30, // Low for good emotional range while maintaining stability
+			"similarity_boost": 0.95, // Very high similarity to original voice
 			"speed":            0.95, // Faster, more energetic pace
-			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		"previous_text": cm.lastIntroText,
 	}
@@ -641,7 +640,6 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 			"stability":         0.5,  // Balanced emotional range
 			"similarity_boost":  0.85, // High similarity to original voice
 			"speed":             0.92, // Good pace for goodbye
-			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		"previous_text": previousText,
 	}
@@ -730,10 +728,9 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		"text":     descriptionText,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.25, // Very low for maximum emotional range
-			"similarity_boost": 0.85, // High similarity to original voice
+			"stability":        0.30, // Low for good emotional range while maintaining stability
+			"similarity_boost": 0.95, // Very high similarity to original voice
 			"speed":            0.95, // Faster, more energetic pace
-			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		// Add previous_text from Track 2 (announcement) for smooth transition
 		"previous_text": cm.lastAnnouncementText,
@@ -825,10 +822,9 @@ func (cm *ContentManager) generateEnhancedBirdDescription(description string, bi
 		"text":     enhancedScript,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.25, // Very low for maximum emotional range
-			"similarity_boost": 0.85, // High similarity to original voice
+			"stability":        0.30, // Low for good emotional range while maintaining stability
+			"similarity_boost": 0.95, // Very high similarity to original voice
 			"speed":            0.95, // Faster, more energetic pace
-			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		// Add previous_text from Track 2 (announcement) for smooth transition
 		"previous_text": cm.lastAnnouncementText,

@@ -32,9 +32,9 @@ func (eba *EnhancedBirdAnnouncement) GenerateAnnouncementWithAmbience(
 	// Ensure cache directory exists
 	os.MkdirAll(eba.cacheDir, 0755)
 
-	// Generate TTS announcement with pauses for better cadence
-	// Spaced periods create effective pauses in ElevenLabs
-	announcementText := fmt.Sprintf("Today's bird is the %s! . . . Listen carefully to its unique song.", birdName)
+	// Generate TTS announcement with pause using break syntax
+	// Keep breaks minimal to avoid audio artifacts
+	announcementText := fmt.Sprintf("Today's bird is the %s! <break time=\"1.0s\" /> Listen carefully to its unique song.", birdName)
 
 	// Use narration manager for TTS
 	narrationManager := NewNarrationManager(os.Getenv("ELEVENLABS_API_KEY"))
@@ -121,8 +121,8 @@ func (eba *EnhancedBirdAnnouncement) mixAnnouncementWithAmbience(ttsData []byte,
 			// Ambience: start at 10%% volume, fade out gradually
 			"[0:a]afade=t=in:st=0:d=%.1f,volume=0.10[ambience_low];"+
 				"[ambience_low]afade=t=out:st=%.1f:d=%.1f[ambience_fade];"+
-				// Boost TTS volume to match intro levels (important for consistency)
-				"[1:a]volume=1.8[voice_boosted];"+
+				// Boost TTS volume to match dynamic track levels
+				"[1:a]volume=2.2[voice_boosted];"+
 				// Mix boosted voice with fading ambience
 				"[voice_boosted][ambience_fade]amix=inputs=2:duration=first:dropout_transition=0.5[mixed];"+
 				// Final fade out - no loudnorm to preserve dynamics
@@ -168,9 +168,9 @@ func (eba *EnhancedBirdAnnouncement) GenerateAnnouncementFromAudioData(
 	// Ensure cache directory exists
 	os.MkdirAll(eba.cacheDir, 0755)
 
-	// Generate TTS announcement with pauses for better cadence
-	// Spaced periods create effective pauses in ElevenLabs
-	announcementText := fmt.Sprintf("Today's bird is the %s! . . . Listen carefully to its unique song.", birdName)
+	// Generate TTS announcement with pause using break syntax
+	// Keep breaks minimal to avoid audio artifacts
+	announcementText := fmt.Sprintf("Today's bird is the %s! <break time=\"1.0s\" /> Listen carefully to its unique song.", birdName)
 
 	// Use narration manager for TTS
 	narrationManager := NewNarrationManager(os.Getenv("ELEVENLABS_API_KEY"))

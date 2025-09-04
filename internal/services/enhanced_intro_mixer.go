@@ -217,9 +217,9 @@ func (eim *EnhancedIntroMixer) mixAudioComponentsWithNormalization(ambiencePath,
 				"[ambience_fade]volume=0.15:enable='gte(t,%.1f)'[ambience_ducked];"+
 				// Chime: delay and set volume
 				"[1:a]adelay=%d|%d,volume=0.6[chime_delayed];"+
-				// Intro: apply normalization to match dynamic TTS volume, then delay
-				// Boost by ~6dB to match dynamic TTS levels
-				"[2:a]volume=2.0,adelay=%d|%d[voice_delayed];"+
+				// Intro: boost volume to match dynamic TTS levels, then delay
+				// Increased boost to 2.2x to match dynamic track volume
+				"[2:a]volume=2.2,adelay=%d|%d[voice_delayed];"+
 				// Mix all three
 				"[ambience_ducked][chime_delayed][voice_delayed]amix=inputs=3:duration=longest:dropout_transition=0.5[mixed];"+
 				// Fade out at the end - no loudnorm to preserve dynamics

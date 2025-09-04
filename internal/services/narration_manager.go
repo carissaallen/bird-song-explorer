@@ -142,11 +142,10 @@ func (nm *NarrationManager) generateAudio(text string, voice VoiceConfig) ([]byt
 	payload := map[string]interface{}{
 		"text":     text,
 		"model_id": "eleven_monolingual_v1",
-		"voice_settings": map[string]float64{
-			"stability":        0.75,
-			"similarity_boost": 0.75,
-			"style":            0.5,
-			"speed":            0.90, // Slower speed for kids (90% of normal)
+		"voice_settings": map[string]interface{}{
+			"stability":        0.30, // Low for good emotional range while maintaining stability
+			"similarity_boost": 0.95, // Very high similarity to original voice
+			"speed":            0.95, // Faster, more energetic pace
 		},
 	}
 
