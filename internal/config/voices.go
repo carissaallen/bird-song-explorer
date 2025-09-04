@@ -28,12 +28,12 @@ var DefaultVoices = []VoiceProfile{
 		Region:   "British",
 		Language: "en-GB",
 	},
-	//{
-	//	ID:       "ErXwobaYiN019PkySvjV",
-	//	Name:     "Antoni",
-	//	Region:   "American",
-	//	Language: "en-US",
-	//},
+	{
+		ID:       "ErXwobaYiN019PkySvjV",
+		Name:     "Antoni",
+		Region:   "American",
+		Language: "en-US",
+	},
 	{
 		ID:       "5GZaeOOG7yqLdoTRsaa6",
 		Name:     "Charlotte",
@@ -41,22 +41,28 @@ var DefaultVoices = []VoiceProfile{
 		Language: "en-AU",
 	},
 	{
-		ID:       "E8tAm6nkbW2yKYAJLVXH",
-		Name:     "Peter",
-		Region:   "Irish",
-		Language: "en-IE",
-	},
-	{
-		ID:       "HYM6YgFANZinEBanknZK",
-		Name:     "Drake",
+		ID:       "FVQMzxJGPUBtfz1Azdoy",
+		Name:     "Danielle",
 		Region:   "Canadian",
 		Language: "en-CA",
 	},
 	{
-		ID:       "XHqlxleHbYnK8xmft8Vq",
-		Name:     "Sally",
-		Region:   "Southern U.S.",
+		ID:       "iCrDUkL56s3C8sCRl7wb",
+		Name:     "Hope",
+		Region:   "American",
 		Language: "en-US",
+	},
+	{
+		ID:       "hmMWXCj9K7N5mCPcRkfC",
+		Name:     "Rory",
+		Region:   "Irish",
+		Language: "en-IE",
+	},
+	{
+		ID:       "HDA9tsk27wYi3uq0fPcK",
+		Name:     "Stuart",
+		Region:   "Australian",
+		Language: "en-AU",
 	},
 }
 

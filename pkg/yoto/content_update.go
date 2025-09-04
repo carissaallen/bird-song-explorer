@@ -562,8 +562,9 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 		"text":     announcement,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.5,
-			"similarity_boost": 0.5,
+			"stability":        0.75,
+			"similarity_boost": 0.75,
+			"style":            0.5,
 			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
 		"previous_text": cm.lastIntroText,
@@ -638,10 +639,10 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 		"text":     outroText,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":         0.6,
-			"similarity_boost":  0.6,
+			"stability":         0.75,
+			"similarity_boost":  0.75,
 			"speed":             0.88, // Even slower for goodbye message
-			"style":             0.3,  // Add some style/emotion
+			"style":             0.5,  // Add more style/emotion
 			"use_speaker_boost": true, // Enhance voice clarity
 		},
 		"previous_text": previousText,
@@ -731,8 +732,9 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		"text":     descriptionText,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.6,
-			"similarity_boost": 0.6,
+			"stability":        0.75,
+			"similarity_boost": 0.75,
+			"style":            0.5,
 			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
 		// Add previous_text from Track 2 (announcement) for smooth transition
@@ -825,8 +827,9 @@ func (cm *ContentManager) generateEnhancedBirdDescription(description string, bi
 		"text":     enhancedScript,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.6,
-			"similarity_boost": 0.6,
+			"stability":        0.75,
+			"similarity_boost": 0.75,
+			"style":            0.5,
 			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
 		// Add previous_text from Track 2 (announcement) for smooth transition
