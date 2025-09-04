@@ -637,9 +637,9 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 		"text":     outroText,
 		"model_id": "eleven_monolingual_v1",
 		"voice_settings": map[string]interface{}{
-			"stability":         0.5,  // Balanced emotional range
-			"similarity_boost":  0.85, // High similarity to original voice
-			"speed":             0.92, // Good pace for goodbye
+			"stability":        0.5,  // Balanced emotional range
+			"similarity_boost": 0.85, // High similarity to original voice
+			"speed":            0.92, // Good pace for goodbye
 		},
 		"previous_text": previousText,
 	}
@@ -717,9 +717,8 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		return nil, fmt.Errorf("voice ID is required for description generation")
 	}
 
-	// Add minimal pauses for better cadence
-	// Too many breaks can cause audio artifacts
-	descriptionText := fmt.Sprintf("Did you know? <break time=\"1.0s\" /> %s <break time=\"1.0s\" /> Isn't that amazing? Nature is full of wonderful surprises!", description)
+	// Remove pauses for better pacing and to prevent audio artifacts
+	descriptionText := fmt.Sprintf("Did you know? %s Isn't that amazing? Nature is full of wonderful surprises!", description)
 
 	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)

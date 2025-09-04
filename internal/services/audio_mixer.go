@@ -234,9 +234,9 @@ func (am *AudioMixer) MixOutroWithNatureSounds(voiceData []byte, birdSongData []
 		"-i", birdFile, // Input: bird song
 		"-t", "30", // Limit to 30 seconds total
 		"-filter_complex",
-		"[1:a]volume=0.15,afade=t=in:st=0:d=1[bird_quiet];"+ // Bird song at low volume
-			"[0:a]apad=whole_dur=30[voice];"+ // Pad voice to 30 seconds
-			"[voice][bird_quiet]amix=inputs=2:duration=longest[mixed];"+ // Mix them
+		"[1:a]volume=0.15,afade=t=in:st=0:d=1[bird_quiet];"+ // Bird song at low volume (matching intro)
+			"[0:a]volume=2.2,apad=whole_dur=30[voice_boosted];"+ // Boost voice volume to match intro track
+			"[voice_boosted][bird_quiet]amix=inputs=2:duration=longest[mixed];"+ // Mix them
 			"[mixed]afade=t=out:st=28:d=2[out]", // Fade out at end - no loudnorm to preserve dynamics
 		"-map", "[out]",
 		"-c:a", "libmp3lame", // MP3 codec
