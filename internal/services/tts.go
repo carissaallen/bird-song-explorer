@@ -48,6 +48,7 @@ func (s *TTSService) generateElevenLabsAudio(text string) ([]byte, error) {
 		"voice_settings": map[string]float64{
 			"stability":        0.75,
 			"similarity_boost": 0.75,
+			"style":            0.5,
 			"speed":            0.90, // Slower speed for kids (90% of normal)
 		},
 	}
