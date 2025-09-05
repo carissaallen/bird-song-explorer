@@ -106,10 +106,10 @@ func (eba *EnhancedBirdAnnouncement) mixAnnouncementWithAmbience(ttsData []byte,
 	// Calculate timings
 	// Ambience continues from Track 1 at low volume
 	// Let the voice complete fully before any fade out
-	fadeInDuration := 0.1                    // Very quick fade in to prevent cutoff
-	fadeOutStart := ttsDuration + 0.5        // Start fading AFTER voice completes
-	fadeOutDuration := 1.0                   // Fade duration for ambience
-	totalDuration := ttsDuration + 2.0       // Add 2 seconds after voice for fade
+	fadeInDuration := 0.1              // Very quick fade in to prevent cutoff
+	fadeOutStart := ttsDuration + 0.5  // Start fading AFTER voice completes
+	fadeOutDuration := 1.0             // Fade duration for ambience
+	totalDuration := ttsDuration + 2.0 // Add 2 seconds after voice for fade
 
 	// Build ffmpeg command for mixing with volume normalization
 	cmd := exec.Command("ffmpeg",
@@ -120,8 +120,8 @@ func (eba *EnhancedBirdAnnouncement) mixAnnouncementWithAmbience(ttsData []byte,
 			// Ambience: start at 15%% volume (matching intro/outro), fade out gradually
 			"[0:a]afade=t=in:st=0:d=%.1f,volume=0.15[ambience_low];"+
 				"[ambience_low]afade=t=out:st=%.1f:d=%.1f[ambience_fade];"+
-				// Boost TTS volume to match dynamic track levels (no fade-in on voice to prevent cutoff)
-				"[1:a]volume=2.2[voice_boosted];"+
+				// Moderate volume boost for TTS (lower than pre-recorded tracks for consistency)
+				"[1:a]volume=1.5[voice_boosted];"+
 				// Mix boosted voice with fading ambience
 				"[voice_boosted][ambience_fade]amix=inputs=2:duration=first:dropout_transition=0.5[mixed];"+
 				// Final fade out after voice completes - no loudnorm to preserve dynamics

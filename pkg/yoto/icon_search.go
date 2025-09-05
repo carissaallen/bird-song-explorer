@@ -1,12 +1,12 @@
 package yoto
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -76,9 +76,14 @@ func (is *IconSearcher) SearchBirdIcon(birdName string) (string, error) {
 		fmt.Printf("Searching yotoicons.com for variation: %s...\n", variation)
 		yotoiconsResult, err := is.searchYotoicons(variation)
 		if err == nil && yotoiconsResult != nil {
+			fmt.Printf("Found icon for %s on yotoicons.com\n", variation)
 			// Upload the icon from yotoicons.com to Yoto
 			mediaID, err := is.uploadYotoiconsIcon(yotoiconsResult)
-			if err == nil && mediaID != "" {
+			if err != nil {
+				fmt.Printf("Failed to upload icon for %s: %v\n", variation, err)
+			} else if mediaID == "" {
+				fmt.Printf("Upload returned empty media ID for %s\n", variation)
+			} else {
 				result := &IconSearchResult{
 					MediaID:  mediaID,
 					Title:    yotoiconsResult.Title,
@@ -92,7 +97,7 @@ func (is *IconSearcher) SearchBirdIcon(birdName string) (string, error) {
 				is.cache[birdName] = result
 				is.cacheMu.Unlock()
 
-				fmt.Printf("Found and uploaded icon from yotoicons for %s (variation: %s): %s\n", birdName, variation, mediaID)
+				fmt.Printf("Successfully uploaded icon from yotoicons for %s (variation: %s): %s\n", birdName, variation, mediaID)
 				return FormatIconID(mediaID), nil
 			}
 		}
@@ -102,9 +107,14 @@ func (is *IconSearcher) SearchBirdIcon(birdName string) (string, error) {
 	fmt.Printf("Searching yotoicons.com for full name: %s\n", birdName)
 	yotoiconsResult, err := is.searchYotoicons(birdName)
 	if err == nil && yotoiconsResult != nil {
+		fmt.Printf("Found icon for %s on yotoicons.com\n", birdName)
 		// Upload the icon from yotoicons.com to Yoto
 		mediaID, err := is.uploadYotoiconsIcon(yotoiconsResult)
-		if err == nil && mediaID != "" {
+		if err != nil {
+			fmt.Printf("Failed to upload icon for %s: %v\n", birdName, err)
+		} else if mediaID == "" {
+			fmt.Printf("Upload returned empty media ID for %s\n", birdName)
+		} else {
 			result := &IconSearchResult{
 				MediaID:  mediaID,
 				Title:    yotoiconsResult.Title,
@@ -118,7 +128,7 @@ func (is *IconSearcher) SearchBirdIcon(birdName string) (string, error) {
 			is.cache[birdName] = result
 			is.cacheMu.Unlock()
 
-			fmt.Printf("Found icon for %s using full name\n", birdName)
+			fmt.Printf("Successfully uploaded icon for %s: %s\n", birdName, mediaID)
 			return FormatIconID(mediaID), nil
 		}
 	}
@@ -290,32 +300,40 @@ func (is *IconSearcher) searchYotoicons(query string) (*IconSearchResult, error)
 // uploadYotoiconsIcon downloads and uploads an icon from yotoicons.com
 func (is *IconSearcher) uploadYotoiconsIcon(icon *IconSearchResult) (string, error) {
 	// Download the icon
+	fmt.Printf("[ICON_SEARCH] Downloading icon from: %s\n", icon.URL)
 	resp, err := http.Get(icon.URL)
 	if err != nil {
-		return "", err
+		fmt.Printf("[ICON_SEARCH] Failed to download icon: %v\n", err)
+		return "", fmt.Errorf("failed to download icon: %w", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("[ICON_SEARCH] Download failed with status: %d\n", resp.StatusCode)
+		return "", fmt.Errorf("download failed with status: %d", resp.StatusCode)
+	}
+
 	iconData, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		fmt.Printf("[ICON_SEARCH] Failed to read icon data: %v\n", err)
+		return "", fmt.Errorf("failed to read icon data: %w", err)
 	}
 
-	// Upload to Yoto using the icon uploader
-	uploader := NewIconUploader(is.client)
+	fmt.Printf("[ICON_SEARCH] Downloaded icon data: %d bytes\n", len(iconData))
 
-	// Save temporarily and upload
-	tempFile := fmt.Sprintf("/tmp/yotoicon_%s.png", icon.MediaID)
-	if err := os.WriteFile(tempFile, iconData, 0644); err != nil {
-		return "", err
-	}
-	defer os.Remove(tempFile)
-
-	mediaID, err := uploader.UploadIcon(tempFile, fmt.Sprintf("bird_%s", icon.Title))
+	// Upload directly to Yoto without saving to file
+	mediaID, err := is.uploadIconData(iconData, fmt.Sprintf("bird_%s", icon.Title))
 	if err != nil {
-		return "", err
+		fmt.Printf("[ICON_SEARCH] Failed to upload icon to Yoto: %v\n", err)
+		return "", fmt.Errorf("failed to upload icon: %w", err)
 	}
 
+	if mediaID == "" {
+		fmt.Printf("[ICON_SEARCH] Upload succeeded but returned empty media ID\n")
+		return "", fmt.Errorf("upload returned empty media ID")
+	}
+
+	fmt.Printf("[ICON_SEARCH] Successfully uploaded icon, media ID: %s\n", mediaID)
 	return mediaID, nil
 }
 
@@ -412,6 +430,66 @@ func getCommonBirdTypes() []string {
 		"gannet", "booby", "tropicbird", "frigatebird", "anhinga", "rail",
 		"coot", "moorhen", "gallinule", "sora", "bittern", "night-heron",
 	}
+}
+
+// uploadIconData uploads icon data directly to Yoto (similar to yoto-myo-magic)
+func (is *IconSearcher) uploadIconData(iconData []byte, filename string) (string, error) {
+	if err := is.client.ensureAuthenticated(); err != nil {
+		return "", fmt.Errorf("authentication failed: %w", err)
+	}
+
+	// Build URL with autoConvert=true like yoto-myo-magic does
+	url := fmt.Sprintf("%s/media/displayIcons/user/me/upload?autoConvert=true&filename=%s",
+		is.client.baseURL, url.QueryEscape(filename))
+
+	fmt.Printf("[ICON_SEARCH] Uploading to: %s\n", url)
+
+	// Create request with raw image data (as done in yoto-myo-magic)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(iconData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+is.client.accessToken)
+	req.Header.Set("Content-Type", "image/png")
+
+	// Send request
+	resp, err := is.client.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload icon: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	fmt.Printf("[ICON_SEARCH] Upload response status: %d\n", resp.StatusCode)
+	fmt.Printf("[ICON_SEARCH] Upload response body: %s\n", string(body))
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("upload failed: %d - %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var uploadResp struct {
+		DisplayIcon struct {
+			MediaID       string `json:"mediaId"`
+			DisplayIconID string `json:"displayIconId"`
+			New           bool   `json:"new"`
+		} `json:"displayIcon"`
+	}
+
+	if err := json.Unmarshal(body, &uploadResp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w - body: %s", err, string(body))
+	}
+
+	if uploadResp.DisplayIcon.MediaID == "" {
+		return "", fmt.Errorf("no media ID in response: %s", string(body))
+	}
+
+	return uploadResp.DisplayIcon.MediaID, nil
 }
 
 // Wait implements rate limiting
