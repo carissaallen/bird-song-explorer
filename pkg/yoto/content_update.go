@@ -137,18 +137,10 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		var descriptionData []byte
 		var err error
 
-		// Use enhanced V4 generator with location awareness when coordinates are available
-		// The V4 generator includes eBird API integration for local sightings
-		enableEnhancedFacts := true
-
-		if enableEnhancedFacts && latitude != 0 && longitude != 0 {
-			fmt.Printf("[CONTENT_UPDATE] Using enhanced facts with location: %.4f, %.4f\n", latitude, longitude)
-			descriptionData, err = cm.generateEnhancedBirdDescription(birdDescription, birdName, voiceID, latitude, longitude)
-		} else {
-			fmt.Printf("[CONTENT_UPDATE] Using standard facts without location (enhanced=%v, lat=%v, lng=%v)\n",
-				enableEnhancedFacts, latitude != 0, longitude != 0)
-			descriptionData, err = cm.generateBirdDescription(birdDescription, birdName, voiceID)
-		}
+		// Use standard generator which sounds better with TTS
+		// The simpler, more conversational text works better than complex V4 facts
+		fmt.Printf("[CONTENT_UPDATE] Using standard facts generator for better TTS quality\n")
+		descriptionData, err = cm.generateBirdDescription(birdDescription, birdName, voiceID)
 
 		if err != nil {
 			hasDescription = false
@@ -650,8 +642,62 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		return nil, fmt.Errorf("voice ID is required for description generation")
 	}
 
-	// Remove pauses for better pacing and to prevent audio artifacts
-	descriptionText := fmt.Sprintf("Did you know? %s Isn't that amazing? Nature is full of wonderful surprises!", description)
+	// Extract components from the Wikipedia description
+	// The first sentence often contains the scientific name in a format like:
+	// "The ring-necked duck (Aythya collaris) is a diving duck..."
+	scientificName := ""
+	simpleFact := description
+	
+	// Look for scientific name in parentheses
+	if strings.Contains(description, "(") && strings.Contains(description, ")") {
+		start := strings.Index(description, "(")
+		end := strings.Index(description, ")")
+		if start < end && end-start < 50 { // Scientific names are usually short
+			potentialName := description[start+1:end]
+			// Check if it looks like a scientific name (two words, capitalized)
+			words := strings.Fields(potentialName)
+			if len(words) == 2 && strings.Title(words[0]) == words[0] {
+				scientificName = potentialName
+				// Remove the scientific name from the description for the fact
+				simpleFact = description[:start] + description[end+1:]
+			}
+		}
+	}
+	
+	// Clean up and simplify the fact
+	simpleFact = strings.TrimSpace(simpleFact)
+	parts := strings.Split(simpleFact, ".")
+	if len(parts) > 0 {
+		// Use the first sentence about what the bird IS
+		if strings.Contains(strings.ToLower(parts[0]), "is a") {
+			simpleFact = strings.TrimSpace(parts[0]) + "."
+		} else if len(parts) > 1 {
+			simpleFact = strings.TrimSpace(parts[0]) + "." + strings.TrimSpace(parts[1]) + "."
+		}
+	}
+	
+	// Remove overly technical content
+	if strings.Contains(strings.ToLower(simpleFact), "derived from") ||
+	   strings.Contains(strings.ToLower(simpleFact), "greek") ||
+	   strings.Contains(strings.ToLower(simpleFact), "latin") {
+		// Just say it's a type of bird if too technical
+		simpleFact = fmt.Sprintf("The %s is an amazing bird!", birdName)
+	}
+	
+	// Build the final text with the requested format
+	var descriptionText string
+	if scientificName != "" {
+		// Format: "[Scientific name]. [Location/sightings]. Did you know? [Fact] Isn't that amazing?"
+		descriptionText = fmt.Sprintf("The scientific name for the %s is %s. There have been recent sightings in your area! Did you know? %s Isn't that amazing? Nature is full of wonderful surprises!", 
+			birdName, scientificName, simpleFact)
+	} else {
+		// If no scientific name found, still mention sightings
+		descriptionText = fmt.Sprintf("There have been recent sightings of %s in your area! Did you know? %s Isn't that amazing? Nature is full of wonderful surprises!", 
+			birdName, simpleFact)
+	}
+	
+	// Log the text that will be spoken
+	fmt.Printf("[BIRD_DESCRIPTION] Track 4 text: %s\n", descriptionText)
 
 	// Generate speech using ElevenLabs
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)

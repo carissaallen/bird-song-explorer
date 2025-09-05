@@ -211,7 +211,7 @@ func (oi *OutroIntegration) applyVolumeBoost(audioData []byte) ([]byte, error) {
 	return boostedData, nil
 }
 
-// mixOutroWithAmbience mixes the outro with ambient sounds at 15% volume
+// mixOutroWithAmbience mixes the outro with ambient sounds at 15% volume and adds ukulele jingle
 func (oi *OutroIntegration) mixOutroWithAmbience(outroData []byte, ambienceData []byte) ([]byte, error) {
 	// Check if ffmpeg is available
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
@@ -223,6 +223,9 @@ func (oi *OutroIntegration) mixOutroWithAmbience(outroData []byte, ambienceData 
 	outroFile := filepath.Join(tempDir, fmt.Sprintf("outro_voice_%d.mp3", time.Now().Unix()))
 	ambienceFile := filepath.Join(tempDir, fmt.Sprintf("ambience_%d.mp3", time.Now().Unix()))
 	outputFile := filepath.Join(tempDir, fmt.Sprintf("outro_mixed_%d.mp3", time.Now().Unix()))
+	
+	// Path to ukulele jingle
+	ukulelePath := "sound_effects/chimes/ukulele_short.mp3"
 
 	// Write files
 	if err := os.WriteFile(outroFile, outroData, 0644); err != nil {
@@ -236,18 +239,44 @@ func (oi *OutroIntegration) mixOutroWithAmbience(outroData []byte, ambienceData 
 	defer os.Remove(ambienceFile)
 	defer os.Remove(outputFile)
 
-	// Mix with ambient sounds at 15% (matching intro) and apply 2.2x boost to voice
+	// Get outro duration for timing
+	outroDuration := oi.getAudioDuration(outroFile)
+	if outroDuration <= 0 {
+		outroDuration = 10.0 // Fallback
+	}
+	
+	// Calculate timings
+	ambienceEndTime := outroDuration + 2.0  // Ambience continues 2 seconds after voice
+	ukuleleStartTime := ambienceEndTime + 0.2  // Small gap before ukulele
+	totalDuration := ukuleleStartTime + 3.0  // Allow time for ukulele to play
+	
+	// Mix with ambient sounds at 15% (matching intro), apply 2.2x boost to voice, and add ukulele at end
 	cmd := exec.Command("ffmpeg",
 		"-i", outroFile,
 		"-stream_loop", "-1",
 		"-i", ambienceFile,
-		"-t", "30",
+		"-i", ukulelePath,
 		"-filter_complex",
-		"[1:a]volume=0.15,afade=t=in:st=0:d=1[ambience_quiet];"+
-			"[0:a]volume=2.2,apad=whole_dur=30[voice_boosted];"+
-			"[voice_boosted][ambience_quiet]amix=inputs=2:duration=longest[mixed];"+
-			"[mixed]afade=t=out:st=28:d=2[out]",
+		fmt.Sprintf(
+			// Ambience: 15%% volume, fade out before ukulele
+			"[1:a]volume=0.15,afade=t=in:st=0:d=1,afade=t=out:st=%.1f:d=1[ambience_quiet];"+
+			// Voice: 2.2x boost
+			"[0:a]volume=2.2[voice_boosted];"+
+			// Mix voice with ambience
+			"[voice_boosted][ambience_quiet]amix=inputs=2:duration=first:dropout_transition=0.5[voice_with_ambience];"+
+			// Ukulele: delay to start after ambience ends, with volume adjustment
+			"[2:a]adelay=%d|%d,volume=0.8[ukulele_delayed];"+
+			// Combine voice+ambience with ukulele
+			"[voice_with_ambience][ukulele_delayed]amix=inputs=2:duration=longest[mixed];"+
+			// Final fade out
+			"[mixed]afade=t=out:st=%.1f:d=0.5[out]",
+			ambienceEndTime - 1.0,  // Start fading ambience 1 second before it ends
+			int(ukuleleStartTime * 1000),  // Ukulele delay in ms
+			int(ukuleleStartTime * 1000),  // Ukulele delay for second channel
+			totalDuration - 0.5,  // Final fade start
+		),
 		"-map", "[out]",
+		"-t", fmt.Sprintf("%.2f", totalDuration),
 		"-c:a", "libmp3lame",
 		"-b:a", "192k",
 		"-y",
@@ -270,4 +299,24 @@ func (oi *OutroIntegration) mixOutroWithAmbience(outroData []byte, ambienceData 
 
 	fmt.Printf("[OUTRO] Successfully mixed with ambient sounds and applied volume boost\n")
 	return mixedData, nil
+}
+
+// getAudioDuration gets the duration of an audio file using ffprobe
+func (oi *OutroIntegration) getAudioDuration(audioFile string) float64 {
+	cmd := exec.Command("ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=noprint_wrappers=1:nokey=1",
+		audioFile,
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		fmt.Printf("[OUTRO] Failed to get audio duration: %v\n", err)
+		return 0
+	}
+
+	duration := 0.0
+	fmt.Sscanf(string(output), "%f", &duration)
+	return duration
 }
