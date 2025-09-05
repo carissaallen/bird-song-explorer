@@ -9,10 +9,12 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/callen/bird-song-explorer/internal/config"
 	"github.com/callen/bird-song-explorer/internal/models"
 	"github.com/callen/bird-song-explorer/internal/services"
 )
@@ -617,7 +619,7 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 	// Get voice name from ID
 	voiceManager := config.NewVoiceManager()
 	voiceName := ""
-	for _, voice := range voiceManager.GetVoices() {
+	for _, voice := range voiceManager.GetAvailableVoices() {
 		if voice.ID == voiceID {
 			voiceName = voice.Name
 			break
