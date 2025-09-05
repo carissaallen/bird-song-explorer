@@ -120,8 +120,8 @@ func (eba *EnhancedBirdAnnouncement) mixAnnouncementWithAmbience(ttsData []byte,
 			// Ambience: start at 15%% volume (matching intro/outro), fade out gradually
 			"[0:a]afade=t=in:st=0:d=%.1f,volume=0.15[ambience_low];"+
 				"[ambience_low]afade=t=out:st=%.1f:d=%.1f[ambience_fade];"+
-				// Boost TTS volume to match dynamic track levels with 0.1s fade-in to prevent cutoff
-				"[1:a]afade=t=in:st=0:d=0.1,volume=2.2[voice_boosted];"+
+				// Boost TTS volume to match dynamic track levels (no fade-in on voice to prevent cutoff)
+				"[1:a]volume=2.2[voice_boosted];"+
 				// Mix boosted voice with fading ambience
 				"[voice_boosted][ambience_fade]amix=inputs=2:duration=first:dropout_transition=0.5[mixed];"+
 				// Final fade out after voice completes - no loudnorm to preserve dynamics

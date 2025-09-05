@@ -543,8 +543,8 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 			cm.ambienceData,
 		)
 		if err == nil {
-			// Store the announcement text for transitions
-			cm.lastAnnouncementText = fmt.Sprintf("Today's bird is the %s! <break time=\"1.0s\" /> Listen carefully to its unique song.", birdName)
+			// Store the announcement text for transitions (without breaks)
+			cm.lastAnnouncementText = fmt.Sprintf("Today's bird is the %s! Listen carefully to its unique song.", birdName)
 			return announcementData, nil
 		}
 		// Fall through to standard generation if enhanced fails
@@ -605,12 +605,8 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 	return audioData, nil
 }
 
-// generateOutro creates an outro audio with jokes, teasers, or wisdom
+// generateOutro uses pre-recorded outro files with ambient sounds
 func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte, error) {
-	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
-	if elevenLabsKey == "" {
-		return nil, fmt.Errorf("no ElevenLabs API key configured")
-	}
 	if voiceID == "" {
 		return nil, fmt.Errorf("voice ID is required for outro generation")
 	}
@@ -618,89 +614,24 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 	now := time.Now()
 	dayOfWeek := now.Weekday()
 
-	outroManager := services.NewOutroManager()
-	outroText := outroManager.GenerateOutroText(birdName, dayOfWeek)
-
-	fmt.Printf("Generating outro for %s on %s: %s\n", birdName, dayOfWeek.String(), outroText)
-
-	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
-
-	var previousText string
-	if cm.lastDescriptionText != "" {
-		previousText = cm.lastDescriptionText
-	} else if cm.lastAnnouncementText != "" {
-		previousText = cm.lastAnnouncementText
-	} else {
-	}
-
-	requestBody := map[string]interface{}{
-		"text":     outroText,
-		"model_id": "eleven_monolingual_v1",
-		"voice_settings": map[string]interface{}{
-			"stability":        0.5,  // Balanced emotional range
-			"similarity_boost": 0.85, // High similarity to original voice
-			"speed":            0.92, // Good pace for goodbye
-		},
-		"previous_text": previousText,
-	}
-
-	jsonData, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Accept", "audio/mpeg")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("xi-api-key", elevenLabsKey)
-
-	client := &http.Client{Timeout: 30 * time.Second}
-
-	// Retry logic for rate limiting
-	var resp *http.Response
-	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		resp, err = client.Do(req)
-		if err != nil {
-			return nil, err
+	// Get voice name from ID
+	voiceManager := config.NewVoiceManager()
+	voiceName := ""
+	for _, voice := range voiceManager.GetVoices() {
+		if voice.ID == voiceID {
+			voiceName = voice.Name
+			break
 		}
-
-		if resp.StatusCode == 429 && i < maxRetries-1 {
-			resp.Body.Close()
-			time.Sleep(time.Duration((i+1)*2) * time.Second)
-			continue
-		}
-		break
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("ElevenLabs API error: %d - %s", resp.StatusCode, string(body))
+	if voiceName == "" {
+		return nil, fmt.Errorf("voice not found for ID: %s", voiceID)
 	}
 
-	audioData, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
+	fmt.Printf("Using pre-recorded outro for %s on %s\n", voiceName, dayOfWeek.String())
 
-	// Mix with the same ambience from intro for consistency
-	if cm.selectedAmbience != "" && len(cm.ambienceData) > 0 {
-		mixer := services.NewAudioMixer()
-		mixedAudio, err := mixer.MixOutroWithAmbienceAndJingle(audioData, cm.ambienceData, cm.selectedAmbience)
-		if err != nil {
-			fmt.Printf("Warning: Failed to mix outro with ambience: %v\n", err)
-			return audioData, nil // Return voice only if mixing fails
-		}
-		return mixedAudio, nil
-	}
-
-	// If no ambience available, return voice only
-	return audioData, nil
+	// Use OutroIntegration to get pre-recorded outro with volume boost
+	outroIntegration := services.NewOutroIntegration()
+	return outroIntegration.GenerateOutroWithAmbience(voiceName, dayOfWeek, cm.ambienceData, "")
 }
 
 // generateBirdDescription creates audio narration for the bird's Wikipedia description
@@ -731,8 +662,7 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 			"similarity_boost": 0.95, // Very high similarity to original voice
 			"speed":            0.95, // Faster, more energetic pace
 		},
-		// Add previous_text from Track 2 (announcement) for smooth transition
-		"previous_text": cm.lastAnnouncementText,
+		// No previous_text since Track 3 (bird song) is between Track 2 and 4
 	}
 
 	jsonData, err := json.Marshal(requestBody)
@@ -825,8 +755,7 @@ func (cm *ContentManager) generateEnhancedBirdDescription(description string, bi
 			"similarity_boost": 0.95, // Very high similarity to original voice
 			"speed":            0.95, // Faster, more energetic pace
 		},
-		// Add previous_text from Track 2 (announcement) for smooth transition
-		"previous_text": cm.lastAnnouncementText,
+		// No previous_text since Track 3 (bird song) is between Track 2 and 4
 	}
 
 	jsonData, err := json.Marshal(requestBody)
@@ -934,4 +863,54 @@ func (cm *ContentManager) captureAmbienceFromEnhancedIntro(introURL string) {
 				cm.selectedAmbience, len(cm.ambienceData))
 		}
 	}
+}
+
+// addFadeInToAudio adds a fade-in effect to audio data
+func (cm *ContentManager) addFadeInToAudio(audioData []byte, fadeSeconds float64) ([]byte, error) {
+	// Check if ffmpeg is available
+	cmd := exec.Command("which", "ffmpeg")
+	if err := cmd.Run(); err != nil {
+		// ffmpeg not available, return original audio
+		return audioData, nil
+	}
+
+	// Create temp files
+	tempDir := os.TempDir()
+	inputFile := filepath.Join(tempDir, fmt.Sprintf("input_%d.mp3", time.Now().Unix()))
+	outputFile := filepath.Join(tempDir, fmt.Sprintf("output_%d.mp3", time.Now().Unix()))
+
+	// Write input data
+	if err := os.WriteFile(inputFile, audioData, 0644); err != nil {
+		return audioData, nil
+	}
+	defer os.Remove(inputFile)
+	defer os.Remove(outputFile)
+
+	// Apply fade-in using ffmpeg
+	ffmpegCmd := exec.Command("ffmpeg",
+		"-i", inputFile,
+		"-af", fmt.Sprintf("afade=t=in:st=0:d=%.1f", fadeSeconds),
+		"-c:a", "libmp3lame",
+		"-b:a", "192k",
+		"-ar", "44100",
+		"-y",
+		outputFile,
+	)
+
+	var stderr bytes.Buffer
+	ffmpegCmd.Stderr = &stderr
+
+	if err := ffmpegCmd.Run(); err != nil {
+		fmt.Printf("[CONTENT_UPDATE] Failed to add fade-in: %v\n", err)
+		return audioData, nil
+	}
+
+	// Read the output
+	fadedData, err := os.ReadFile(outputFile)
+	if err != nil {
+		return audioData, nil
+	}
+
+	fmt.Printf("[CONTENT_UPDATE] Added %.1fs fade-in to audio\n", fadeSeconds)
+	return fadedData, nil
 }
