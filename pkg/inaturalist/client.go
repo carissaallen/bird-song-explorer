@@ -211,7 +211,10 @@ func (c *Client) FormatForKids(taxon *Taxon, observations []Observation) []strin
 			}
 		}
 
-		// Location-based facts
+		// Location-based facts - DISABLED
+		// We handle location awareness properly in Track 4 with actual eBird sightings
+		// This prevents generic/incorrect location claims
+		/*
 		if len(locations) > 0 {
 			if len(locations) == 1 {
 				facts = append(facts, fmt.Sprintf("Someone recently spotted this bird near %s! Bird watchers love to record where they see different birds.", locations[0]))
@@ -221,6 +224,7 @@ func (c *Client) FormatForKids(taxon *Taxon, observations []Observation) []strin
 				facts = append(facts, fmt.Sprintf("Bird watchers have spotted this bird in many places nearby, including %s! These birds might even live in your neighborhood.", strings.Join(locations[:2], " and ")))
 			}
 		}
+		*/
 
 		// Media observation fact
 		if hasPhotos && hasSounds {

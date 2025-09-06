@@ -18,13 +18,13 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	router.GET("/health", healthCheck)
 
 	router.GET("/audio/intros/:filename", handler.ServeIntroWithNatureSounds)
-	router.Static("/audio/outros", "./final_outros")
+	router.Static("/audio/outros", "./assets/final_outros")
 	router.Static("/audio/cache", "./audio_cache") // This already serves everything under audio_cache including dynamic_intros
 
 	v1 := router.Group("/api/v1")
 	{
 		v1.GET("/bird-of-day", handler.GetBirdOfDay)
-		v1.POST("/yoto/webhook", handler.HandleYotoWebhook)
+		v1.POST("/yoto/webhook", handler.HandleYotoWebhookV3)
 		v1.GET("/audio/intro", handler.GetRandomIntro)
 		v1.POST("/update-card/:cardId", handler.UpdateCardManually)
 		v1.POST("/daily-update", handler.DailyUpdateHandler)

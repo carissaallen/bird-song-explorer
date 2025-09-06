@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"github.com/callen/bird-song-explorer/internal/config"
 )
 
 // OutroIntegration handles the complete outro flow with pre-recorded files
@@ -14,17 +16,19 @@ type OutroIntegration struct {
 	staticManager *StaticOutroManager
 	audioMixer    *AudioMixer
 	useStatic     bool
+	voiceManager  *config.VoiceManager
 }
 
 // NewOutroIntegration creates a new outro integration service
 func NewOutroIntegration() *OutroIntegration {
 	// Check environment variable
 	useStatic := os.Getenv("USE_STATIC_OUTROS") != "false" // Default to true
-	
+
 	return &OutroIntegration{
 		staticManager: NewStaticOutroManager(),
 		audioMixer:    NewAudioMixer(),
 		useStatic:     useStatic,
+		voiceManager:  config.NewVoiceManager(),
 	}
 }
 
@@ -35,26 +39,26 @@ func (oi *OutroIntegration) GenerateOutroWithAmbience(
 	ambienceData []byte,
 	baseURL string,
 ) ([]byte, error) {
-	
+
 	if !oi.useStatic {
 		// Fall back to dynamic TTS generation (old method)
 		return oi.generateDynamicOutro(voiceName, dayOfWeek, ambienceData)
 	}
-	
+
 	// Get the pre-recorded outro file path
 	outroPath, err := oi.getStaticOutroPath(voiceName, dayOfWeek)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get outro path: %w", err)
 	}
-	
+
 	// Read the pre-recorded outro
 	outroData, err := os.ReadFile(outroPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read outro file: %w", err)
 	}
-	
+
 	fmt.Printf("[OUTRO] Using pre-recorded outro: %s\n", filepath.Base(outroPath))
-	
+
 	// Mix with ambient sounds if available
 	if ambienceData != nil && len(ambienceData) > 0 {
 		fmt.Printf("[OUTRO] Mixing with ambient sounds (%d bytes)\n", len(ambienceData))
@@ -67,7 +71,7 @@ func (oi *OutroIntegration) GenerateOutroWithAmbience(
 		fmt.Printf("[OUTRO] Successfully mixed outro with ambient sounds\n")
 		return mixedAudio, nil
 	}
-	
+
 	// Apply volume boost to match intro track even without ambient sounds
 	fmt.Printf("[OUTRO] No ambient sounds, applying volume boost to outro\n")
 	return oi.applyVolumeBoost(outroData)
@@ -76,23 +80,23 @@ func (oi *OutroIntegration) GenerateOutroWithAmbience(
 // getStaticOutroPath selects the appropriate pre-recorded outro file
 func (oi *OutroIntegration) getStaticOutroPath(voiceName string, dayOfWeek time.Weekday) (string, error) {
 	outroType := oi.getOutroType(dayOfWeek)
-	
+
 	// Find available outros of this type for this voice
-	pattern := filepath.Join("final_outros", fmt.Sprintf("outro_%s_*_%s.mp3", outroType, voiceName))
+	pattern := filepath.Join("assets/final_outros", fmt.Sprintf("outro_%s_*_%s.mp3", outroType, voiceName))
 	matches, err := filepath.Glob(pattern)
 	if err != nil || len(matches) == 0 {
 		return "", fmt.Errorf("no outros found for %s/%s (pattern: %s)", outroType, voiceName, pattern)
 	}
-	
+
 	// Select one deterministically based on date
 	now := time.Now()
 	daySeed := now.Year()*10000 + int(now.Month())*100 + now.Day()
 	outroIndex := daySeed % len(matches)
 	selectedFile := matches[outroIndex]
-	
-	fmt.Printf("[OUTRO] Selected: %s (type: %s, voice: %s, index: %d of %d)\n", 
+
+	fmt.Printf("[OUTRO] Selected: %s (type: %s, voice: %s, index: %d of %d)\n",
 		filepath.Base(selectedFile), outroType, voiceName, outroIndex, len(matches))
-	
+
 	return selectedFile, nil
 }
 
@@ -127,7 +131,7 @@ func (oi *OutroIntegration) GetOutroURL(voiceName string, dayOfWeek time.Weekday
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Return URL to the outro file
 	filename := filepath.Base(outroPath)
 	return fmt.Sprintf("%s/audio/outros/%s", baseURL, filename), nil
@@ -135,13 +139,17 @@ func (oi *OutroIntegration) GetOutroURL(voiceName string, dayOfWeek time.Weekday
 
 // ValidateOutros checks that all required outro files exist
 func (oi *OutroIntegration) ValidateOutros() error {
-	voices := []string{"Amelia", "Antoni", "Hope", "Rory", "Danielle", "Stuart"}
+	// Get all configured voices
+	voices := []string{}
+	for _, voice := range oi.voiceManager.GetAvailableVoices() {
+		voices = append(voices, voice.Name)
+	}
 	types := []string{"joke", "wisdom", "teaser", "challenge", "funfact"}
-	
+
 	missingCount := 0
 	for _, voice := range voices {
 		for _, outroType := range types {
-			pattern := filepath.Join("final_outros", fmt.Sprintf("outro_%s_*_%s.mp3", outroType, voice))
+			pattern := filepath.Join("assets/final_outros", fmt.Sprintf("outro_%s_*_%s.mp3", outroType, voice))
 			matches, _ := filepath.Glob(pattern)
 			if len(matches) == 0 {
 				fmt.Printf("❌ Missing: %s outros for %s\n", outroType, voice)
@@ -151,11 +159,11 @@ func (oi *OutroIntegration) ValidateOutros() error {
 			}
 		}
 	}
-	
+
 	if missingCount > 0 {
 		return fmt.Errorf("missing %d outro types", missingCount)
 	}
-	
+
 	fmt.Println("✅ All outro files validated successfully!")
 	return nil
 }
@@ -223,9 +231,9 @@ func (oi *OutroIntegration) mixOutroWithAmbience(outroData []byte, ambienceData 
 	outroFile := filepath.Join(tempDir, fmt.Sprintf("outro_voice_%d.mp3", time.Now().Unix()))
 	ambienceFile := filepath.Join(tempDir, fmt.Sprintf("ambience_%d.mp3", time.Now().Unix()))
 	outputFile := filepath.Join(tempDir, fmt.Sprintf("outro_mixed_%d.mp3", time.Now().Unix()))
-	
+
 	// Path to ukulele jingle
-	ukulelePath := "sound_effects/chimes/ukulele_short.mp3"
+	ukulelePath := "assets/sound_effects/chimes/ukulele_short.mp3"
 
 	// Write files
 	if err := os.WriteFile(outroFile, outroData, 0644); err != nil {
@@ -244,12 +252,12 @@ func (oi *OutroIntegration) mixOutroWithAmbience(outroData []byte, ambienceData 
 	if outroDuration <= 0 {
 		outroDuration = 10.0 // Fallback
 	}
-	
+
 	// Calculate timings
-	ambienceEndTime := outroDuration + 2.0  // Ambience continues 2 seconds after voice
-	ukuleleStartTime := ambienceEndTime + 0.2  // Small gap before ukulele
-	totalDuration := ukuleleStartTime + 3.0  // Allow time for ukulele to play
-	
+	ambienceEndTime := outroDuration + 2.0    // Ambience continues 2 seconds after voice
+	ukuleleStartTime := ambienceEndTime + 0.2 // Small gap before ukulele
+	totalDuration := ukuleleStartTime + 3.0   // Allow time for ukulele to play
+
 	// Mix with ambient sounds at 15% (matching intro), apply 2.2x boost to voice, and add ukulele at end
 	cmd := exec.Command("ffmpeg",
 		"-i", outroFile,
@@ -260,20 +268,20 @@ func (oi *OutroIntegration) mixOutroWithAmbience(outroData []byte, ambienceData 
 		fmt.Sprintf(
 			// Ambience: 15%% volume, fade out before ukulele
 			"[1:a]volume=0.15,afade=t=in:st=0:d=1,afade=t=out:st=%.1f:d=1[ambience_quiet];"+
-			// Voice: 2.2x boost
-			"[0:a]volume=2.2[voice_boosted];"+
-			// Mix voice with ambience
-			"[voice_boosted][ambience_quiet]amix=inputs=2:duration=first:dropout_transition=0.5[voice_with_ambience];"+
-			// Ukulele: delay to start after ambience ends, with volume adjustment
-			"[2:a]adelay=%d|%d,volume=0.8[ukulele_delayed];"+
-			// Combine voice+ambience with ukulele
-			"[voice_with_ambience][ukulele_delayed]amix=inputs=2:duration=longest[mixed];"+
-			// Final fade out
-			"[mixed]afade=t=out:st=%.1f:d=0.5[out]",
-			ambienceEndTime - 1.0,  // Start fading ambience 1 second before it ends
-			int(ukuleleStartTime * 1000),  // Ukulele delay in ms
-			int(ukuleleStartTime * 1000),  // Ukulele delay for second channel
-			totalDuration - 0.5,  // Final fade start
+				// Voice: 2.2x boost
+				"[0:a]volume=2.2[voice_boosted];"+
+				// Mix voice with ambience
+				"[voice_boosted][ambience_quiet]amix=inputs=2:duration=first:dropout_transition=0.5[voice_with_ambience];"+
+				// Ukulele: delay to start after ambience ends, with volume adjustment
+				"[2:a]adelay=%d|%d,volume=0.8[ukulele_delayed];"+
+				// Combine voice+ambience with ukulele
+				"[voice_with_ambience][ukulele_delayed]amix=inputs=2:duration=longest[mixed];"+
+				// Final fade out
+				"[mixed]afade=t=out:st=%.1f:d=0.5[out]",
+			ambienceEndTime-1.0,        // Start fading ambience 1 second before it ends
+			int(ukuleleStartTime*1000), // Ukulele delay in ms
+			int(ukuleleStartTime*1000), // Ukulele delay for second channel
+			totalDuration-0.5,          // Final fade start
 		),
 		"-map", "[out]",
 		"-t", fmt.Sprintf("%.2f", totalDuration),

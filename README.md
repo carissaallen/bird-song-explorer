@@ -11,7 +11,7 @@
 Every morning, this Yoto card automatically updates with a new bird from your area. Your child will hear:
 
 ### Track Structure
-1. **Introduction** - A warm welcome with nature sounds from a variety of narrators from different regions
+1. **Introduction** - A warm welcome with nature sounds softly playing in the background
 2. **Today's Bird** - Announcement of the featured bird with ambient nature sounds
 3. **Bird Song** - The actual bird's song recorded in nature  
 4. **Bird Explorer's Guide** - Fun, educational facts about the bird tailored for young explorers

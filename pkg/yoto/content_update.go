@@ -17,6 +17,7 @@ import (
 	"github.com/callen/bird-song-explorer/internal/config"
 	"github.com/callen/bird-song-explorer/internal/models"
 	"github.com/callen/bird-song-explorer/internal/services"
+	"github.com/callen/bird-song-explorer/pkg/ebird"
 )
 
 // UpdateContentRequest represents the request body for updating card content
@@ -64,13 +65,13 @@ func getRandomBookIcon() string {
 
 // UpdateExistingCardContentWithDescriptionAndVoice updates an existing MYO card with new content including bird description and specific voice
 func (cm *ContentManager) UpdateExistingCardContentWithDescriptionAndVoice(cardID string, birdName string, introURL string, birdSongURL string, birdDescription string, voiceID string) error {
-	// For now, call the location-aware version with zero coordinates
+	// Call the location-aware version with zero coordinates to indicate no location available
+	// The zero coordinates will trigger the no-location fallback behavior
 	return cm.UpdateExistingCardContentWithDescriptionVoiceAndLocation(cardID, birdName, introURL, birdSongURL, birdDescription, voiceID, 0, 0)
 }
 
 // UpdateExistingCardContentWithDescriptionVoiceAndLocation updates an existing MYO card with location-aware content
 func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocation(cardID string, birdName string, introURL string, birdSongURL string, birdDescription string, voiceID string, latitude, longitude float64) error {
-	// Voice ID must be provided explicitly
 	if voiceID == "" {
 		return fmt.Errorf("voice ID must be provided explicitly")
 	}
@@ -126,21 +127,32 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		return fmt.Errorf("failed to upload bird song: %w", err)
 	}
 
-	// No longer storing bird song data for outro - we'll use ambience instead
-
 	var descriptionSha string
 	var descriptionInfo *TranscodeResponse
 	var hasDescription bool
 
 	if birdDescription != "" {
-		// Use enhanced fact generator if we have location data
 		var descriptionData []byte
 		var err error
 
+		// Check if we have valid location coordinates
+		hasValidLocation := latitude != 0 || longitude != 0
+
+		if hasValidLocation {
+			locationName := cm.getLocationName(latitude, longitude)
+			if locationName != "" {
+				fmt.Printf("[CONTENT_UPDATE] Location available (%s) - using location-aware facts\n", locationName)
+			} else {
+				fmt.Printf("[CONTENT_UPDATE] Location coordinates available but couldn't determine city/state - using generic facts\n")
+			}
+		} else {
+			fmt.Printf("[CONTENT_UPDATE] No location available - using generic bird facts without sighting claims\n")
+		}
+
 		// Use standard generator which sounds better with TTS
-		// The simpler, more conversational text works better than complex V4 facts
+		// Pass location availability flag to generateBirdDescription
 		fmt.Printf("[CONTENT_UPDATE] Using standard facts generator for better TTS quality\n")
-		descriptionData, err = cm.generateBirdDescription(birdDescription, birdName, voiceID)
+		descriptionData, err = cm.generateBirdDescriptionWithLocation(birdDescription, birdName, voiceID, latitude, longitude)
 
 		if err != nil {
 			hasDescription = false
@@ -553,11 +565,13 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 
 	requestBody := map[string]interface{}{
 		"text":     announcement,
-		"model_id": "eleven_monolingual_v1",
+		"model_id": "eleven_multilingual_v2",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.30, // Low for good emotional range while maintaining stability
-			"similarity_boost": 0.95, // Very high similarity to original voice
-			"speed":            0.95, // Faster, more energetic pace
+			"stability":         0.40,
+			"similarity_boost":  0.90,
+			"use_speaker_boost": true,
+			"speed":             1.0,
+			"style":             0,
 		},
 		"previous_text": cm.lastIntroText,
 	}
@@ -628,6 +642,465 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 	return outroIntegration.GenerateOutroWithAmbience(voiceName, dayOfWeek, cm.ambienceData, "")
 }
 
+// getLocationName converts coordinates to a kid-friendly location name
+func (cm *ContentManager) getLocationName(latitude, longitude float64) string {
+	ebirdAPIKey := os.Getenv("EBIRD_API_KEY")
+	if ebirdAPIKey == "" {
+		return ""
+	}
+
+	ebirdClient := ebird.NewClient(ebirdAPIKey)
+	hotspots, err := ebirdClient.GetNearbyHotspots(latitude, longitude, 25)
+	if err != nil || len(hotspots) == 0 {
+		return ""
+	}
+
+	cities := make(map[string]int)
+	states := make(map[string]int)
+
+	for _, hotspot := range hotspots {
+		parts := strings.Split(hotspot.LocationName, ", ")
+		if len(parts) >= 2 {
+			// Last part is usually state/province/country
+			statePart := strings.TrimSpace(parts[len(parts)-1])
+			if isValidLocationName(statePart) {
+				states[statePart]++
+			}
+
+			// Second to last is usually city
+			if len(parts) >= 2 {
+				cityPart := strings.TrimSpace(parts[len(parts)-2])
+				// Skip if it looks like a street address
+				if !strings.Contains(cityPart, "St") && !strings.Contains(cityPart, "Ave") &&
+					!strings.Contains(cityPart, "Rd") && !containsNumbers(cityPart) {
+					cities[cityPart]++
+				}
+			}
+		}
+	}
+
+	// Get most common city and state
+	city := getMostCommonLocation(cities)
+	state := getMostCommonLocation(states)
+
+	if city != "" && state != "" {
+		return fmt.Sprintf("%s, %s", city, state)
+	} else if state != "" {
+		return state
+	}
+
+	return ""
+}
+
+func isValidLocationName(s string) bool {
+	s = strings.TrimSpace(s)
+
+	validUSStates := []string{"Oregon", "Washington", "California", "Nevada", "Idaho",
+		"Arizona", "Utah", "Colorado", "Montana", "Wyoming", "New Mexico", "Texas",
+		"Alaska", "Hawaii", "Florida", "Georgia", "North Carolina", "South Carolina",
+		"Virginia", "West Virginia", "Maryland", "Delaware", "New Jersey", "New York",
+		"Connecticut", "Rhode Island", "Massachusetts", "Vermont", "New Hampshire", "Maine",
+		"Pennsylvania", "Ohio", "Indiana", "Illinois", "Michigan", "Wisconsin", "Minnesota",
+		"Iowa", "Missouri", "Arkansas", "Louisiana", "Mississippi", "Alabama", "Tennessee",
+		"Kentucky", "Kansas", "Nebraska", "Oklahoma", "North Dakota", "South Dakota"}
+
+	for _, state := range validUSStates {
+		if strings.EqualFold(s, state) {
+			return true
+		}
+	}
+
+	if len(s) == 2 {
+		s = strings.ToUpper(s)
+		validAbbr := []string{"OR", "WA", "CA", "NV", "ID", "AZ", "UT", "CO", "MT", "WY",
+			"NM", "TX", "AK", "HI", "FL", "GA", "NC", "SC", "VA", "WV", "MD", "DE", "NJ",
+			"NY", "CT", "RI", "MA", "VT", "NH", "ME", "PA", "OH", "IN", "IL", "MI", "WI",
+			"MN", "IA", "MO", "AR", "LA", "MS", "AL", "TN", "KY", "KS", "NE", "OK", "ND", "SD", "DC"}
+		for _, abbr := range validAbbr {
+			if s == abbr {
+				return true
+			}
+		}
+	}
+
+	canadianRegions := []string{
+		"Ontario", "Quebec", "British Columbia", "Alberta", "Manitoba", "Saskatchewan",
+		"Nova Scotia", "New Brunswick", "Newfoundland and Labrador", "Prince Edward Island",
+		"Northwest Territories", "Yukon", "Nunavut",
+		// Common abbreviations
+		"ON", "QC", "BC", "AB", "MB", "SK", "NS", "NB", "NL", "PE", "NT", "YT", "NU",
+	}
+
+	for _, region := range canadianRegions {
+		if strings.EqualFold(s, region) {
+			return true
+		}
+	}
+
+	countries := []string{
+		"Canada", "United Kingdom", "UK", "England", "Scotland", "Wales", "Northern Ireland",
+		"Australia", "New Zealand", "Ireland", "South Africa", "India", "Singapore",
+		"Mexico", "Costa Rica", "Panama", "Colombia", "Ecuador", "Peru", "Brazil", "Argentina",
+		"Kenya", "Tanzania", "Uganda", "South Africa", "Botswana", "Namibia",
+		"Japan", "Thailand", "Malaysia", "Indonesia", "Philippines",
+		"Spain", "France", "Germany", "Italy", "Netherlands", "Belgium", "Switzerland",
+		"Norway", "Sweden", "Finland", "Denmark", "Iceland",
+	}
+
+	for _, country := range countries {
+		if strings.EqualFold(s, country) {
+			return true
+		}
+	}
+
+	australianRegions := []string{
+		"New South Wales", "Victoria", "Queensland", "Western Australia",
+		"South Australia", "Tasmania", "Australian Capital Territory", "Northern Territory",
+		"NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT",
+	}
+
+	for _, region := range australianRegions {
+		if strings.EqualFold(s, region) {
+			return true
+		}
+	}
+
+	ukRegions := []string{
+		"Greater London", "South East", "South West", "West Midlands", "North West",
+		"North East", "Yorkshire and the Humber", "East Midlands", "East of England",
+	}
+
+	for _, region := range ukRegions {
+		if strings.EqualFold(s, region) {
+			return true
+		}
+	}
+
+	locationKeywords := []string{"Province", "Prefecture", "State", "Territory", "Region", "Department"}
+	for _, keyword := range locationKeywords {
+		if strings.Contains(s, keyword) {
+			return true
+		}
+	}
+
+	if len(s) > 2 && !containsNumbers(s) && !strings.Contains(s, "/") && !strings.Contains(s, "\\") {
+		if len(s) > 0 && s[0] >= 'A' && s[0] <= 'Z' {
+			return true
+		}
+	}
+
+	return false
+}
+
+func containsNumbers(s string) bool {
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			return true
+		}
+	}
+	return false
+}
+
+func getMostCommonLocation(locations map[string]int) string {
+	maxCount := 0
+	result := ""
+	for loc, count := range locations {
+		if count > maxCount {
+			maxCount = count
+			result = loc
+		}
+	}
+	return result
+}
+
+// getGenericBirdFact returns an interesting generic fact based on bird characteristics
+func getGenericBirdFact(birdName string, existingFact string) string {
+	lowerName := strings.ToLower(birdName)
+
+	// Size-based facts
+	if strings.Contains(lowerName, "eagle") || strings.Contains(lowerName, "hawk") ||
+		strings.Contains(lowerName, "owl") {
+		return "Birds of prey have incredible eyesight - they can spot tiny movements from far away!"
+	}
+
+	if strings.Contains(lowerName, "hummingbird") {
+		return "Hummingbirds are the only birds that can fly backwards and their hearts beat over one thousand two-hundred times per minute!"
+	}
+
+	// Water birds
+	if strings.Contains(lowerName, "duck") || strings.Contains(lowerName, "goose") ||
+		strings.Contains(lowerName, "swan") {
+		return "Water birds have special oil glands that keep their feathers waterproof!"
+	}
+
+	// Songbirds
+	if strings.Contains(lowerName, "robin") || strings.Contains(lowerName, "sparrow") ||
+		strings.Contains(lowerName, "finch") || strings.Contains(lowerName, "warbler") {
+		return "Songbirds learn their songs by listening to their parents, just like you learned to talk!"
+	}
+
+	// Colorful birds
+	if strings.Contains(lowerName, "cardinal") || strings.Contains(lowerName, "blue") ||
+		strings.Contains(lowerName, "gold") {
+		return "Bright colors help birds recognize their own species and attract mates!"
+	}
+
+	// Nocturnal birds
+	if strings.Contains(lowerName, "owl") || strings.Contains(lowerName, "nightjar") {
+		return "Night birds have special feathers that let them fly almost silently!"
+	}
+
+	// Migration-related
+	if strings.Contains(lowerName, "swallow") || strings.Contains(lowerName, "crane") ||
+		strings.Contains(lowerName, "arctic") {
+		return "Some birds travel thousands of miles each year, using the stars and Earth's magnetic field to navigate!"
+	}
+
+	// Intelligence
+	if strings.Contains(lowerName, "crow") || strings.Contains(lowerName, "raven") ||
+		strings.Contains(lowerName, "jay") {
+		return "These birds are super smart - they can use tools and even recognize human faces!"
+	}
+
+	// Tropical birds
+	if strings.Contains(lowerName, "parrot") || strings.Contains(lowerName, "toucan") ||
+		strings.Contains(lowerName, "macaw") {
+		return "Tropical birds often live in the rainforest canopy, rarely coming down to the ground!"
+	}
+
+	// Shore birds
+	if strings.Contains(lowerName, "gull") || strings.Contains(lowerName, "tern") ||
+		strings.Contains(lowerName, "sandpiper") {
+		return "Shore birds have long legs and beaks perfect for finding food in sand and shallow water!"
+	}
+
+	// Default interesting facts
+	defaultFacts := []string{
+		"Birds are the only animals with feathers - no other creature has them!",
+		"A bird's bones are hollow, making them light enough to fly!",
+		"Birds can see colors that humans can't even imagine!",
+		"Most birds have excellent memories and can remember hundreds of food hiding spots!",
+		"Baby birds can eat their own body weight in food every day!",
+		"Birds help plants grow by spreading seeds in their droppings!",
+		"Some birds can sleep with one half of their brain while the other stays awake!",
+		"Birds existed alongside dinosaurs - they're living dinosaurs themselves!",
+	}
+
+	// Pick a random default fact
+	rand.Seed(time.Now().UnixNano())
+	return defaultFacts[rand.Intn(len(defaultFacts))]
+}
+
+// generateBirdDescriptionWithLocation creates audio narration with location awareness
+func (cm *ContentManager) generateBirdDescriptionWithLocation(description string, birdName string, voiceID string, latitude, longitude float64) ([]byte, error) {
+	hasValidLocation := latitude != 0 || longitude != 0
+
+	if hasValidLocation {
+		// Use location-aware description
+		return cm.generateBirdDescriptionWithSightings(description, birdName, voiceID, latitude, longitude)
+	} else {
+		// Use generic description without sighting claims
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+}
+
+// generateBirdDescriptionWithSightings creates audio narration with location-specific sighting information
+func (cm *ContentManager) generateBirdDescriptionWithSightings(description string, birdName string, voiceID string, latitude, longitude float64) ([]byte, error) {
+	// Check if we have ElevenLabs API key
+	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
+	if elevenLabsKey == "" {
+		return nil, fmt.Errorf("no ElevenLabs API key configured")
+	}
+
+	// Voice ID must be provided by the caller
+	if voiceID == "" {
+		return nil, fmt.Errorf("voice ID is required for description generation")
+	}
+
+	// Extract components from the Wikipedia description
+	scientificName := ""
+	simpleFact := description
+
+	// Look for scientific name in parentheses
+	if strings.Contains(description, "(") && strings.Contains(description, ")") {
+		start := strings.Index(description, "(")
+		end := strings.Index(description, ")")
+		if start < end && end-start < 50 { // Scientific names are usually short
+			potentialName := description[start+1 : end]
+			// Check if it looks like a scientific name (two words, capitalized)
+			words := strings.Fields(potentialName)
+			if len(words) == 2 && strings.Title(words[0]) == words[0] {
+				scientificName = potentialName
+				// Remove the scientific name from the description for the fact
+				simpleFact = description[:start] + description[end+1:]
+			}
+		}
+	}
+
+	// Clean up and simplify the fact
+	simpleFact = strings.TrimSpace(simpleFact)
+	parts := strings.Split(simpleFact, ".")
+	if len(parts) > 0 {
+		// Use the first sentence about what the bird IS
+		if strings.Contains(strings.ToLower(parts[0]), "is a") {
+			simpleFact = strings.TrimSpace(parts[0]) + "."
+		} else if len(parts) > 1 {
+			simpleFact = strings.TrimSpace(parts[0]) + ". " + strings.TrimSpace(parts[1]) + "."
+		}
+	}
+
+	// Remove overly technical content
+	if strings.Contains(strings.ToLower(simpleFact), "derived from") ||
+		strings.Contains(strings.ToLower(simpleFact), "greek") ||
+		strings.Contains(strings.ToLower(simpleFact), "latin") {
+		// Just say it's a type of bird if too technical
+		simpleFact = fmt.Sprintf("The %s is an amazing bird!", birdName)
+	}
+
+	// Build the final text WITH location claims (for valid location case)
+	var descriptionText string
+
+	// Get location name for kid-friendly references
+	locationName := cm.getLocationName(latitude, longitude)
+	locationReference := "your area"
+	if locationName != "" {
+		// Use the actual location name instead of "your area"
+		locationReference = locationName
+	}
+
+	// Try to get actual sighting data if we have eBird API key
+	ebirdAPIKey := os.Getenv("EBIRD_API_KEY")
+	hasSightings := false
+
+	if ebirdAPIKey != "" {
+		// Check for actual sightings using eBird API
+		ebirdClient := ebird.NewClient(ebirdAPIKey)
+		observations, err := ebirdClient.GetRecentObservations(latitude, longitude, 30)
+		if err == nil {
+			// Check if this specific bird has been seen
+			for _, obs := range observations {
+				if strings.EqualFold(obs.CommonName, birdName) {
+					hasSightings = true
+					if locationName != "" {
+						fmt.Printf("[BIRD_DESCRIPTION] Verified sighting of %s in %s\n", birdName, locationName)
+					} else {
+						fmt.Printf("[BIRD_DESCRIPTION] Verified sighting of %s at provided location\n", birdName)
+					}
+					break
+				}
+			}
+		}
+	}
+
+	// Use random selection for variety
+	rand.Seed(time.Now().UnixNano())
+
+	if hasSightings {
+		// We have verified sightings - use location name in the text
+		if scientificName != "" {
+			templates := []string{
+				"The %s has a special scientific name: %s. Recently, people spotted them in %s! %s Isn't that cool? Maybe you'll see one today!",
+				"Scientists call the %s by its special name: %s. Guess what? Bird watchers have spotted them in %s recently! Here's a feathered fact: %s How exciting is that?",
+				"The %s goes by the scientific name %s. Amazing news - they've been seen in %s! Did you know? %s Nature never stops surprising us!",
+				"The %s is called %s in science books. It was spotted in %s not too long ago! What a discovery! %s",
+				"Meet the %s, scientifically known as %s! Good news for explorers: there have been sightings in %s. Fun fact: %s Isn't nature incredible?",
+			}
+			descriptionText = fmt.Sprintf(templates[rand.Intn(len(templates))],
+				birdName, scientificName, locationReference, simpleFact)
+		} else {
+			templates := []string{
+				"Bird watchers have spotted the %s in %s! Did you know? %s Isn't that cool? Nature is full of wonderful surprises!",
+				"Exciting news! %s has been spotted in %s recently! Here's something cool: %s",
+				"Bird alert! The %s has been seen flying in %s! Fun fact for you: %s Nature is so fascinating!",
+				"Guess what? %s are active in %s right now! Did you know? %s What an incredible bird!",
+			}
+			descriptionText = fmt.Sprintf(templates[rand.Intn(len(templates))],
+				birdName, locationReference, simpleFact)
+		}
+	} else {
+		{
+			fmt.Printf("[BIRD_DESCRIPTION] No verified sightings at provided location - using generic facts\n")
+			// Fall back to generic text without location references
+			if scientificName != "" {
+				templates := []string{
+					"Want to sound like a scientist? The %s is called %s. Pretty cool, right? %s",
+					"The fancy science name for the %s is %s. Try saying it out loud! Here's a feathered fact: %s",
+					"The %s has a special scientific name: %s. Fun fact: %s. Nature is so fascinating!",
+					"Here's something amazing: the %s is called %s in science language. Did you know? %s",
+					"Scientists call the %s by the name %s. Here's a cool fact: %s Nature is full of surprises!",
+					"The %s is scientifically known as %s. Fun fact: %s Keep exploring - birds are all around us!",
+				}
+				descriptionText = fmt.Sprintf(templates[rand.Intn(len(templates))],
+					birdName, scientificName, simpleFact)
+			} else {
+				templates := []string{
+					"The %s is one of nature's wonders. Here's why: %s Birds are everywhere, waiting to be discovered!",
+					"Every bird has a story. The %s' story goes like this: %s Isn't that cool?",
+					"Let's learn about the %s! Here's something special: %s Nature has so many treasures to find!",
+					"Discover the wonderful %s! Fun fact: %s Keep your eyes and ears open for bird adventures!",
+					"The %s is more than just a bird-it's a clue to how nature works. Did you know? %s Every bird has its own special story!",
+				}
+				descriptionText = fmt.Sprintf(templates[rand.Intn(len(templates))],
+					birdName, simpleFact)
+			}
+		}
+	}
+
+	// Log the text that will be spoken
+	fmt.Printf("[BIRD_DESCRIPTION] Track 4 text (location-aware): %s\n", descriptionText)
+
+	// Generate speech using ElevenLabs
+	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
+
+	requestBody := map[string]interface{}{
+		"text":     descriptionText,
+		"model_id": "eleven_multilingual_v2",
+		"voice_settings": map[string]interface{}{
+			"stability":         0.40,
+			"similarity_boost":  0.90,
+			"use_speaker_boost": true,
+			"speed":             1.0,
+			"style":             0,
+		},
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "audio/mpeg")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("xi-api-key", elevenLabsKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("ElevenLabs API error: %d - %s", resp.StatusCode, string(body))
+	}
+
+	audioData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store the description text for the next track (outro)
+	cm.lastDescriptionText = descriptionText
+
+	return audioData, nil
+}
+
 // generateBirdDescription creates audio narration for the bird's Wikipedia description
 // Uses the same voice as introduction for consistency
 func (cm *ContentManager) generateBirdDescription(description string, birdName string, voiceID string) ([]byte, error) {
@@ -684,16 +1157,19 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 		simpleFact = fmt.Sprintf("The %s is an amazing bird!", birdName)
 	}
 
-	// Build the final text with the requested format
+	// Build enhanced generic text for global audience
 	var descriptionText string
+
+	additionalFact := getGenericBirdFact(birdName, simpleFact)
+
 	if scientificName != "" {
-		// Format: "[Scientific name]. [Location/sightings]. Did you know? [Fact] Isn't that amazing?"
-		descriptionText = fmt.Sprintf("The scientific name for the %s is %s. There have been recent sightings in your area! Did you know? %s Isn't that amazing? Nature is full of wonderful surprises!",
-			birdName, scientificName, simpleFact)
+		// Format with scientific name and enhanced fact
+		descriptionText = fmt.Sprintf("The scientific name for the %s is %s. Did you know? %s %s Birds are found all over the world, each one perfectly adapted to its home!",
+			birdName, scientificName, simpleFact, additionalFact)
 	} else {
-		// If no scientific name found, still mention sightings
-		descriptionText = fmt.Sprintf("There have been recent sightings of %s in your area! Did you know? %s Isn't that amazing? Nature is full of wonderful surprises!",
-			birdName, simpleFact)
+		// Enhanced version without scientific name
+		descriptionText = fmt.Sprintf("Let me tell you about the amazing %s! Did you know? %s %s Every bird has its own special story. Listen carefully to learn its unique song!",
+			birdName, simpleFact, additionalFact)
 	}
 
 	// Log the text that will be spoken
@@ -704,13 +1180,14 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 
 	requestBody := map[string]interface{}{
 		"text":     descriptionText,
-		"model_id": "eleven_monolingual_v1",
+		"model_id": "eleven_multilingual_v2",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.30, // Low for good emotional range while maintaining stability
-			"similarity_boost": 0.95, // Very high similarity to original voice
-			"speed":            0.95, // Faster, more energetic pace
+			"stability":         0.40,
+			"similarity_boost":  0.90,
+			"use_speaker_boost": true,
+			"speed":             1.0,
+			"style":             0,
 		},
-		// No previous_text since Track 3 (bird song) is between Track 2 and 4
 	}
 
 	jsonData, err := json.Marshal(requestBody)
@@ -751,6 +1228,8 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 }
 
 // generateEnhancedBirdDescription creates location-aware audio narration using V4 fact generator
+// NOTE: This function is NOT currently used but kept for future enhancement
+// To use: replace generateBirdDescriptionWithLocation call with this function
 func (cm *ContentManager) generateEnhancedBirdDescription(description string, birdName string, voiceID string, latitude, longitude float64) ([]byte, error) {
 	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
 	if elevenLabsKey == "" {
@@ -797,11 +1276,13 @@ func (cm *ContentManager) generateEnhancedBirdDescription(description string, bi
 
 	requestBody := map[string]interface{}{
 		"text":     enhancedScript,
-		"model_id": "eleven_monolingual_v1",
+		"model_id": "eleven_multilingual_v2",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.30, // Low for good emotional range while maintaining stability
-			"similarity_boost": 0.95, // Very high similarity to original voice
-			"speed":            0.95, // Faster, more energetic pace
+			"stability":         0.40,
+			"similarity_boost":  0.90,
+			"use_speaker_boost": true,
+			"speed":             1.0,
+			"style":             0,
 		},
 		// No previous_text since Track 3 (bird song) is between Track 2 and 4
 	}
@@ -904,7 +1385,7 @@ func (cm *ContentManager) captureAmbienceFromEnhancedIntro(introURL string) {
 		cm.selectedAmbience = selectedAmbience.Name
 
 		// Try to read the ambience file
-		ambiencePath := filepath.Join("sound_effects", selectedAmbience.Path)
+		ambiencePath := filepath.Join("assets/sound_effects", selectedAmbience.Path)
 		if data, err := os.ReadFile(ambiencePath); err == nil {
 			cm.ambienceData = data
 			fmt.Printf("[CONTENT_UPDATE] Captured %s ambience for Track 2 (%d bytes)\n",

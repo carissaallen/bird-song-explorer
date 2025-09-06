@@ -26,7 +26,7 @@ func (uth *UserTimeHelper) GetUserLocalTime(deviceTimezone string) time.Time {
 		fmt.Printf("[USER_TIME] Failed to load timezone %s: %v, using server time\n", deviceTimezone, err)
 		return time.Now()
 	}
-	
+
 	// Return current time in user's timezone
 	userTime := time.Now().In(loc)
 	fmt.Printf("[USER_TIME] User timezone: %s, Local time: %s\n", deviceTimezone, userTime.Format("15:04:05"))
@@ -42,7 +42,7 @@ func (uth *UserTimeHelper) GetUserLocalHour(deviceTimezone string) int {
 // GetNatureSoundForUserTime selects appropriate nature sound based on user's local time
 func (uth *UserTimeHelper) GetNatureSoundForUserTime(deviceTimezone string) string {
 	hour := uth.GetUserLocalHour(deviceTimezone)
-	
+
 	// Select nature sound based on user's local hour
 	switch {
 	case hour >= 5 && hour < 9:
@@ -69,7 +69,7 @@ func (uth *UserTimeHelper) GetNatureSoundForUserTime(deviceTimezone string) stri
 // GetTimeOfDayGreeting returns a greeting based on user's local time
 func (uth *UserTimeHelper) GetTimeOfDayGreeting(deviceTimezone string) string {
 	hour := uth.GetUserLocalHour(deviceTimezone)
-	
+
 	switch {
 	case hour >= 5 && hour < 12:
 		return "Good morning"
@@ -92,7 +92,7 @@ func (uth *UserTimeHelper) IsUserDaytime(deviceTimezone string) bool {
 func (uth *UserTimeHelper) GetUserTimeContext(deviceTimezone string) map[string]interface{} {
 	userTime := uth.GetUserLocalTime(deviceTimezone)
 	hour := userTime.Hour()
-	
+
 	return map[string]interface{}{
 		"timezone":     deviceTimezone,
 		"local_time":   userTime.Format("15:04:05"),

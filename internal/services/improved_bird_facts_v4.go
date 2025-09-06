@@ -15,6 +15,9 @@ import (
 )
 
 // ImprovedFactGeneratorV4 generates bird facts with location-specific sightings
+// NOTE: This generator is NOT currently used in production but kept for future enhancement
+// It provides much more detailed, location-aware facts than the standard generator
+// To use: See generateEnhancedBirdDescription in content_update.go
 type ImprovedFactGeneratorV4 struct {
 	wikiClient  *wikipedia.Client
 	inatClient  *inaturalist.Client
@@ -181,6 +184,12 @@ func (fg *ImprovedFactGeneratorV4) getLocationContext(bird *models.Bird, lat, ln
 
 // generateLocationIntro creates a location-specific introduction
 func (fg *ImprovedFactGeneratorV4) generateLocationIntro(bird *models.Bird, context LocationContext) string {
+	// Don't make location claims if we don't have real location data
+	if context.CityName == "your city" || context.CityName == "" {
+		// Skip location intro when no real location is available
+		return ""
+	}
+
 	if len(context.RecentSightings) == 0 {
 		return ""
 	}
@@ -366,9 +375,9 @@ func (fg *ImprovedFactGeneratorV4) getCityFromCoordinates(lat, lng float64) stri
 	}
 
 	// Specific fallback for known coordinates
-	// Bend, Oregon area
-	if lat >= 43.5 && lat <= 44.5 && lng >= -122.0 && lng <= -120.5 {
-		return "Bend"
+	// London area
+	if lat >= 51.0 && lat <= 52.0 && lng >= -1.0 && lng <= 1.0 {
+		return "London"
 	}
 
 	// Fallback to generic
@@ -388,9 +397,9 @@ func (fg *ImprovedFactGeneratorV4) getStateFromCoordinates(lat, lng float64) str
 	}
 
 	// Specific fallback for known coordinates
-	// Bend, Oregon area
-	if lat >= 43.5 && lat <= 44.5 && lng >= -122.0 && lng <= -120.5 {
-		return "Oregon"
+	// London/England area
+	if lat >= 51.0 && lat <= 52.0 && lng >= -1.0 && lng <= 1.0 {
+		return "England"
 	}
 
 	// Fallback to generic
@@ -528,11 +537,13 @@ func cleanLocationName(s string) string {
 	return strings.Join(cleaned, " ")
 }
 
-// Helper function to validate state names/abbreviations
+// Helper function to validate location names (states/provinces/countries)
 func isValidState(s string) bool {
-	// Common US state abbreviations
+	// Clean the input
+	s = strings.TrimSpace(s)
+
+	// US states and abbreviations
 	if len(s) == 2 {
-		// Check if it's a valid state abbreviation
 		stateAbbr := strings.ToUpper(s)
 		validAbbr := []string{"AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
 			"HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
@@ -546,7 +557,7 @@ func isValidState(s string) bool {
 		}
 	}
 
-	// Check for full state names
+	// Full US state names
 	stateNames := []string{"Alabama", "Alaska", "Arizona", "Arkansas", "California",
 		"Colorado", "Connecticut", "Delaware", "Florida", "Georgia",
 		"Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas",
@@ -556,7 +567,8 @@ func isValidState(s string) bool {
 		"New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma",
 		"Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
 		"South Dakota", "Tennessee", "Texas", "Utah", "Vermont",
-		"Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming"}
+		"Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming",
+		"District of Columbia", "D.C."}
 
 	for _, state := range stateNames {
 		if strings.EqualFold(s, state) {
@@ -564,12 +576,51 @@ func isValidState(s string) bool {
 		}
 	}
 
-	// Also check for common variations
-	if strings.EqualFold(s, "District of Columbia") || strings.EqualFold(s, "D.C.") {
+	// Canadian provinces
+	canadianRegions := []string{
+		"Ontario", "Quebec", "British Columbia", "Alberta", "Manitoba", "Saskatchewan",
+		"Nova Scotia", "New Brunswick", "Newfoundland and Labrador", "Prince Edward Island",
+		"Northwest Territories", "Yukon", "Nunavut",
+		"ON", "QC", "BC", "AB", "MB", "SK", "NS", "NB", "NL", "PE", "NT", "YT", "NU",
+	}
+
+	for _, region := range canadianRegions {
+		if strings.EqualFold(s, region) {
+			return true
+		}
+	}
+
+	// Countries
+	countries := []string{
+		"Canada", "United Kingdom", "UK", "England", "Scotland", "Wales",
+		"Australia", "New Zealand", "Ireland", "Mexico", "Costa Rica",
+		"Brazil", "Argentina", "Kenya", "South Africa", "India", "Japan",
+	}
+
+	for _, country := range countries {
+		if strings.EqualFold(s, country) {
+			return true
+		}
+	}
+
+	// Australian states
+	australianRegions := []string{
+		"New South Wales", "Victoria", "Queensland", "Western Australia",
+		"South Australia", "Tasmania", "NSW", "VIC", "QLD", "WA", "SA", "TAS",
+	}
+
+	for _, region := range australianRegions {
+		if strings.EqualFold(s, region) {
+			return true
+		}
+	}
+
+	// Accept capitalized strings that look like location names
+	if len(s) > 2 && !containsNumbers(s) && s[0] >= 'A' && s[0] <= 'Z' {
 		return true
 	}
 
-	return false // Only return true for exact matches
+	return false
 }
 
 // Helper function to get most common item from map
@@ -627,8 +678,14 @@ func min(a, b int) int {
 // joinSectionsNaturally combines sections with location-aware closing
 func (fg *ImprovedFactGeneratorV4) joinSectionsNaturally(sections []string, birdName string, context LocationContext) string {
 	if len(sections) == 0 {
-		return fmt.Sprintf("The %s is an incredible bird! Listen for its unique song and watch for it in %s.",
-			birdName, context.CityName)
+		// Don't mention location if we don't have real location data
+		if context.CityName != "your city" && context.CityName != "" {
+			return fmt.Sprintf("The %s is a superstar of the sky! Listen for its unique song in %s.",
+				birdName, context.CityName)
+		} else {
+			return fmt.Sprintf("The %s is a fascinating part of our natural world.",
+				birdName)
+		}
 	}
 
 	result := strings.Join(sections, " ")
@@ -643,30 +700,30 @@ func (fg *ImprovedFactGeneratorV4) joinSectionsNaturally(sections []string, bird
 	if hasActualLocation {
 		// Use specific location names when available
 		closings = []string{
-			fmt.Sprintf(" Now you're a %s expert! Look for one in %s today!", birdName, context.CityName),
-			fmt.Sprintf(" Keep watching for %ss around %s - you might be the next to spot one!", birdName, context.CityName),
-			fmt.Sprintf(" The %s is waiting to be discovered in %s! Happy bird watching!", birdName, context.CityName),
-			fmt.Sprintf(" Now go explore %s and find a %s!", context.CityName, birdName),
+			fmt.Sprintf(" Now you're a %s expert! Can you spot one flying around %s?", birdName, context.CityName),
+			fmt.Sprintf(" Your next adventure? Spotting a %s flying around %s! Good luck, explorer!", birdName, context.CityName),
+			fmt.Sprintf(" A %s is waiting to be discovered in %s! Happy bird watching!", birdName, context.CityName),
+			fmt.Sprintf(" Grab your explorer's hat! There's a %s calling in %s!", birdName, context.CityName),
 		}
 	} else {
-		// Use generic phrasing when location is unknown
+		// Use generic phrasing WITHOUT location references when location is unknown
 		closings = []string{
-			fmt.Sprintf(" Now you're a %s expert! Look for one in your city today!", birdName),
-			fmt.Sprintf(" Keep watching for %ss in your neighborhood - you might be the next to spot one!", birdName),
-			fmt.Sprintf(" The %s is waiting to be discovered near you! Happy bird watching!", birdName),
-			fmt.Sprintf(" Now go explore your area and find a %s!", birdName),
+			fmt.Sprintf(" Now you're a %s expert! Fly high with your curiosity, just like a bird!", birdName),
+			fmt.Sprintf(" The %s is truly amazing! Birds remind us to look up, listen, and wonder. Who knows what bird you'll discover next?", birdName),
+			fmt.Sprintf(" Thanks for learning about the %s with me! Nature is full of wonderful surprises!", birdName),
+			fmt.Sprintf(" Now you know so much about the %s! Give yourself a little chirp of applause!", birdName),
 		}
 	}
 
-	if len(context.RecentSightings) > 0 {
+	// Only mention sightings if we have actual location data
+	if hasActualLocation && len(context.RecentSightings) > 0 {
 		sightingCount := len(context.RecentSightings)
 		if sightingCount == 1 {
 			closings = append(closings,
-				fmt.Sprintf(" With 1 recent sighting near you, today might be your lucky day to see a %s!", birdName))
+				fmt.Sprintf(" With 1 recent sighting nearby, adventure is calling! Grab your binoculars and you might spot a %s!", birdName))
 		} else {
 			closings = append(closings,
-				fmt.Sprintf(" With %d recent sightings near you, today might be your lucky day to see a %s!",
-					sightingCount, birdName))
+				fmt.Sprintf(" The %s has been spotted %d times! Are you the next explorer to find it?", birdName, sightingCount))
 		}
 	}
 
@@ -677,26 +734,23 @@ func (fg *ImprovedFactGeneratorV4) joinSectionsNaturally(sections []string, bird
 	return result
 }
 
-// Include all the helper functions from V3 (transitions, physical description, etc.)
-// These remain the same but I'm including key ones for completeness
-
 func (fg *ImprovedFactGeneratorV4) getTransition(transType int, usedTransitions map[string]bool) string {
 	transitions := map[int][]string{
 		0: { // TransitionFact
-			"Here's an amazing fact:",
-			"Did you know?",
-			"Fun fact:",
-			"Here's something cool:",
-			"Guess what?",
-			"Want to know something special?",
-			"Check this out:",
+			"Here's a feathered fact! ",
+			"Did you know? ",
+			"Fun fact: ",
+			"Here's something cool! ",
+			"Guess what? ",
+			"Want to know something special? ",
+			"Check this out: ",
 		},
 		1: { // TransitionAction
-			"Listen carefully!",
-			"Watch for this:",
-			"Look closely!",
-			"Keep your eyes open:",
-			"Pay attention to this:",
+			"Listen like a birdwatcher. ",
+			"Watch for this: ",
+			"Look closely, explorer! ",
+			"Keep your eyes open. ",
+			"Tune in like a bird! ",
 		},
 	}
 

@@ -25,6 +25,7 @@ type Handler struct {
 	audioManager            *services.AudioManager
 	narrationManager        *services.NarrationManager
 	introGenerator          *services.DynamicIntroGenerator
+	updateCache            *services.UpdateCache
 }
 
 func NewHandler(cfg *config.Config) *Handler {
@@ -50,6 +51,7 @@ func NewHandler(cfg *config.Config) *Handler {
 		audioManager:            services.NewAudioManager(),
 		narrationManager:        services.NewNarrationManager(cfg.ElevenLabsAPIKey),
 		introGenerator:          services.NewDynamicIntroGenerator(cfg.ElevenLabsAPIKey),
+		updateCache:            services.NewUpdateCache(),
 	}
 }
 
@@ -119,7 +121,7 @@ func (h *Handler) HandleYotoWebhook(c *gin.Context) {
 	location, err := h.locationService.GetLocationFromIP(clientIP)
 	var deviceTimezone string
 
-	if err == nil && location.City != "Bend" {
+	if err == nil && location.City != "London" {
 		log.Printf("Using IP-based location: %s, %s (IP: %s)\n",
 			location.City, location.Country, clientIP)
 	} else {
@@ -134,7 +136,7 @@ func (h *Handler) HandleYotoWebhook(c *gin.Context) {
 		// If we have a device timezone, use it
 		if deviceTimezone != "" {
 			tzLocation := h.timezoneLocationService.GetLocationFromTimezone(deviceTimezone)
-			if tzLocation.City != "Bend" || deviceTimezone == "America/Denver" {
+			if tzLocation.City != "London" || deviceTimezone == "Europe/London" {
 				location = tzLocation
 				log.Printf("Using timezone-based location: %s, %s (from timezone: %s)\n",
 					location.City, location.Country, deviceTimezone)
@@ -142,8 +144,8 @@ func (h *Handler) HandleYotoWebhook(c *gin.Context) {
 		}
 
 		// If still using default location, log a warning
-		if location.City == "Bend" && deviceTimezone != "America/Denver" {
-			log.Printf("WARNING: Using default location (Bend, OR) - IP: %s, Timezone: %s\n",
+		if location.City == "London" && deviceTimezone != "Europe/London" {
+			log.Printf("WARNING: Using default location (London, UK) - IP: %s, Timezone: %s\n",
 				clientIP, deviceTimezone)
 		}
 	}
@@ -248,11 +250,11 @@ func (h *Handler) UpdateCardManually(c *gin.Context) {
 
 	// Get location from query params or use default
 	location := &models.Location{
-		Latitude:  44.0582,
-		Longitude: -121.3153,
-		City:      "Bend",
-		Region:    "Oregon",
-		Country:   "United States",
+		Latitude:  51.5074,
+		Longitude: -0.1278,
+		City:      "London",
+		Region:    "England",
+		Country:   "United Kingdom",
 	}
 
 	bird, err := h.birdSelector.SelectBirdOfDay(location)
@@ -333,7 +335,7 @@ func (h *Handler) ServeIntroWithNatureSounds(c *gin.Context) {
 	log.Printf("[INTRO_HANDLER] Serving intro with nature sounds: %s", filename)
 
 	// Read the original intro file
-	introPath := fmt.Sprintf("./final_intros/%s", filename)
+	introPath := fmt.Sprintf("./assets/final_intros/%s", filename)
 	introData, err := os.ReadFile(introPath)
 	if err != nil {
 		log.Printf("[INTRO_HANDLER] Failed to read intro file %s: %v", filename, err)

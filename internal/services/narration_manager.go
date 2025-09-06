@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"time"
-	
+
 	"github.com/callen/bird-song-explorer/internal/config"
 )
 
@@ -40,28 +40,23 @@ func NewNarrationManager(elevenLabsKey string) *NarrationManager {
 	}
 }
 
-// SelectDailyVoice chooses a voice for the entire session (rotates daily through all voices)
+// SelectDailyVoice returns the daily voice using voice rotation
 func (nm *NarrationManager) SelectDailyVoice() VoiceConfig {
-	// Get the daily voice from the VoiceManager
-	voiceProfile := nm.voiceManager.GetDailyVoice()
-	
+	voice := nm.voiceManager.GetDailyVoice()
 	nm.selectedVoice = VoiceConfig{
-		Name:    voiceProfile.Name,
-		VoiceID: voiceProfile.ID,
+		Name:    voice.Name,
+		VoiceID: voice.ID,
 	}
 
 	return nm.selectedVoice
 }
 
-// GetRandomVoice returns a random voice (for variety across different sessions)
+// GetRandomVoice returns the daily voice (no longer random, for consistency)
 func (nm *NarrationManager) GetRandomVoice() VoiceConfig {
-	voices := nm.voiceManager.GetAvailableVoices()
-	rand.Seed(time.Now().UnixNano())
-	selectedVoice := voices[rand.Intn(len(voices))]
-	
+	voice := nm.voiceManager.GetDailyVoice()
 	nm.selectedVoice = VoiceConfig{
-		Name:    selectedVoice.Name,
-		VoiceID: selectedVoice.ID,
+		Name:    voice.Name,
+		VoiceID: voice.ID,
 	}
 	return nm.selectedVoice
 }
@@ -141,11 +136,13 @@ func (nm *NarrationManager) generateAudio(text string, voice VoiceConfig) ([]byt
 
 	payload := map[string]interface{}{
 		"text":     text,
-		"model_id": "eleven_monolingual_v1",
+		"model_id": "eleven_multilingual_v2",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.30, // Low for good emotional range while maintaining stability
-			"similarity_boost": 0.95, // Very high similarity to original voice
-			"speed":            0.95, // Faster, more energetic pace
+			"stability":         0.40,
+			"similarity_boost":  0.90,
+			"use_speaker_boost": true,
+			"speed":             1.0,
+			"style":             0,
 		},
 	}
 

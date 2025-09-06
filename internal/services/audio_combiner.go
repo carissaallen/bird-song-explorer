@@ -18,6 +18,7 @@ type AudioCombiner struct {
 	elevenLabsKey string
 	cacheDir      string
 	httpClient    *http.Client
+	voiceManager  *config.VoiceManager
 }
 
 // NewAudioCombiner creates a new audio combiner
@@ -29,6 +30,7 @@ func NewAudioCombiner(elevenLabsKey string) *AudioCombiner {
 		elevenLabsKey: elevenLabsKey,
 		cacheDir:      cacheDir,
 		httpClient:    &http.Client{},
+		voiceManager:  config.NewVoiceManager(),
 	}
 }
 
@@ -69,10 +71,9 @@ func (ac *AudioCombiner) GetIntroWithBirdName(introURL string, birdName string, 
 
 // generateBirdAnnouncement creates TTS audio saying "Today's bird is the [bird name]!"
 func (ac *AudioCombiner) generateBirdAnnouncement(birdName string, voiceID string) ([]byte, error) {
-	// Use provided voice ID or get daily voice
+	// Use provided voice ID or use the daily voice
 	if voiceID == "" {
-		voiceManager := config.NewVoiceManager()
-		dailyVoice := voiceManager.GetDailyVoice()
+		dailyVoice := ac.voiceManager.GetDailyVoice()
 		voiceID = dailyVoice.ID
 	}
 
@@ -82,11 +83,13 @@ func (ac *AudioCombiner) generateBirdAnnouncement(birdName string, voiceID strin
 
 	requestBody := map[string]interface{}{
 		"text":     text,
-		"model_id": "eleven_monolingual_v1",
+		"model_id": "eleven_multilingual_v2",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.30, // Low for good emotional range while maintaining stability
-			"similarity_boost": 0.95, // Very high similarity to original voice
-			"speed":            0.95, // Faster, more energetic pace
+			"stability":         0.40,
+			"similarity_boost":  0.90,
+			"use_speaker_boost": true,
+			"speed":             1.0,
+			"style":             0,
 		},
 	}
 

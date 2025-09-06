@@ -281,7 +281,7 @@ func (am *AudioMixer) MixOutroWithAmbienceAndJingle(voiceData []byte, ambienceDa
 	outputFile := filepath.Join(tempDir, fmt.Sprintf("outro_mixed_%d.mp3", time.Now().Unix()))
 
 	// Path to ukulele jingle
-	ukuleleFile := "sound_effects/chimes/ukulele_short.mp3"
+	ukuleleFile := "assets/sound_effects/chimes/ukulele_short.mp3"
 
 	fmt.Printf("[AUDIO_MIXER] Voice file: %s\n", voiceFile)
 	fmt.Printf("[AUDIO_MIXER] Ambience file: %s\n", ambienceFile)

@@ -37,18 +37,18 @@ type XenoCantoNatureResponse struct {
 // XenoCantoNatureRecording represents a nature sound recording
 type XenoCantoNatureRecording struct {
 	ID       string      `json:"id"`
-	Gen      string      `json:"gen"`      // Genus
-	Sp       string      `json:"sp"`       // Species
-	En       string      `json:"en"`       // English name
-	Rec      string      `json:"rec"`      // Recordist
-	Type     string      `json:"type"`     // Type of recording
-	File     string      `json:"file"`     // Audio file URL
+	Gen      string      `json:"gen"`       // Genus
+	Sp       string      `json:"sp"`        // Species
+	En       string      `json:"en"`        // English name
+	Rec      string      `json:"rec"`       // Recordist
+	Type     string      `json:"type"`      // Type of recording
+	File     string      `json:"file"`      // Audio file URL
 	FileName string      `json:"file-name"` // Original filename
-	Length   string      `json:"length"`   // Duration
-	Time     string      `json:"time"`     // Time of day recorded
-	Also     interface{} `json:"also"`     // Other species in recording (can be string or array)
-	Rmk      string      `json:"rmk"`      // Remarks
-	Q        string      `json:"q"`        // Quality rating
+	Length   string      `json:"length"`    // Duration
+	Time     string      `json:"time"`      // Time of day recorded
+	Also     interface{} `json:"also"`      // Other species in recording (can be string or array)
+	Rmk      string      `json:"rmk"`       // Remarks
+	Q        string      `json:"q"`         // Quality rating
 }
 
 // GetNatureSoundByType fetches nature sounds based on type
@@ -67,9 +67,9 @@ func (nsf *NatureSoundFetcher) GetNatureSoundByType(soundType string) ([]byte, e
 
 	// Map sound types to search queries
 	queries := nsf.getSoundTypeQuery(soundType)
-	
+
 	fmt.Printf("[NATURE_FETCHER] Fetching nature sounds for type: %s\n", soundType)
-	
+
 	// Try each query until we find suitable recordings
 	for _, query := range queries {
 		recordings, err := nsf.searchXenoCanto(query)
@@ -91,8 +91,8 @@ func (nsf *NatureSoundFetcher) GetNatureSoundByType(soundType string) ([]byte, e
 
 				// Cache the audio
 				os.WriteFile(cacheFile, audioData, 0644)
-				
-				fmt.Printf("[NATURE_FETCHER] Successfully fetched nature sound: %s (%s)\n", 
+
+				fmt.Printf("[NATURE_FETCHER] Successfully fetched nature sound: %s (%s)\n",
 					soundType, selected.En)
 				return audioData, nil
 			}
@@ -172,14 +172,14 @@ func (nsf *NatureSoundFetcher) searchXenoCanto(query string) ([]XenoCantoNatureR
 	baseURL := "https://www.xeno-canto.org/api/2/recordings"
 	params := url.Values{}
 	params.Set("query", query)
-	
+
 	// Add quality filter - only high quality recordings
 	if !strings.Contains(query, "q:") {
-		params.Set("query", query + " q:A")
+		params.Set("query", query+" q:A")
 	}
 
 	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
-	
+
 	// Make the request
 	resp, err := nsf.client.Get(fullURL)
 	if err != nil {
@@ -221,7 +221,7 @@ func (nsf *NatureSoundFetcher) selectBestRecording(recordings []XenoCantoNatureR
 	// Select randomly from high quality recordings
 	rand.Seed(time.Now().UnixNano())
 	selected := highQuality[rand.Intn(len(highQuality))]
-	
+
 	return &selected
 }
 
@@ -238,7 +238,7 @@ func (nsf *NatureSoundFetcher) isDurationSufficient(duration string) bool {
 	seconds := 0
 	fmt.Sscanf(parts[0], "%d", &minutes)
 	fmt.Sscanf(parts[1], "%d", &seconds)
-	
+
 	totalSeconds := minutes*60 + seconds
 	return totalSeconds >= 20 // At least 20 seconds
 }
@@ -284,7 +284,7 @@ func (nsf *NatureSoundFetcher) checkCache(cacheFile string) ([]byte, error) {
 func (nsf *NatureSoundFetcher) GetAmbientSoundscape() ([]byte, error) {
 	// Based on time of day, select appropriate soundscape
 	hour := time.Now().Hour()
-	
+
 	var soundType string
 	switch {
 	case hour >= 5 && hour < 9:

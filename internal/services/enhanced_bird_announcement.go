@@ -52,11 +52,11 @@ func (eba *EnhancedBirdAnnouncement) GenerateAnnouncementWithAmbience(
 	var ambiencePath string
 	switch selectedAmbience {
 	case "forest":
-		ambiencePath = "sound_effects/ambience/forest-ambience.mp3"
+		ambiencePath = "assets/sound_effects/ambience/forest-ambience.mp3"
 	case "jungle":
-		ambiencePath = "sound_effects/ambience/jungle_sounds.mp3"
+		ambiencePath = "assets/sound_effects/ambience/jungle_sounds.mp3"
 	case "morning":
-		ambiencePath = "sound_effects/ambience/morning-birdsong.mp3"
+		ambiencePath = "assets/sound_effects/ambience/morning-birdsong.mp3"
 	default:
 		// Unknown ambience, return just TTS
 		return ttsData, nil

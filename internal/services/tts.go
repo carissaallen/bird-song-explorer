@@ -13,12 +13,14 @@ import (
 type TTSService struct {
 	elevenLabsKey string
 	openAIKey     string
+	voiceManager  *config.VoiceManager
 }
 
 func NewTTSService(elevenLabsKey, openAIKey string) *TTSService {
 	return &TTSService{
 		elevenLabsKey: elevenLabsKey,
 		openAIKey:     openAIKey,
+		voiceManager:  config.NewVoiceManager(),
 	}
 }
 
@@ -36,19 +38,20 @@ func (s *TTSService) GenerateIntroAudio() ([]byte, error) {
 }
 
 func (s *TTSService) generateElevenLabsAudio(text string) ([]byte, error) {
-	// Use daily voice for consistency
-	voiceManager := config.NewVoiceManager()
-	dailyVoice := voiceManager.GetDailyVoice()
+	// Get the daily voice from the voice manager
+	dailyVoice := s.voiceManager.GetDailyVoice()
 	voiceID := dailyVoice.ID
 	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
 
 	payload := map[string]interface{}{
 		"text":     text,
-		"model_id": "eleven_monolingual_v1",
+		"model_id": "eleven_multilingual_v2",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.30, // Low for good emotional range while maintaining stability
-			"similarity_boost": 0.95, // Very high similarity to original voice
-			"speed":            0.95, // Faster, more energetic pace
+			"stability":         0.40,
+			"similarity_boost":  0.90,
+			"use_speaker_boost": true,
+			"speed":             1.0,
+			"style":             0,
 		},
 	}
 

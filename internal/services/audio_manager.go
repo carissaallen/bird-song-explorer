@@ -18,31 +18,34 @@ type AudioManager struct {
 	introURLs     []string // URLs where intros are hosted
 	enhancedMixer *EnhancedIntroMixer
 	elevenLabsKey string
+	voiceManager  *config.VoiceManager
 }
 
 func NewAudioManager() *AudioManager {
 	// Get ElevenLabs API key from environment
 	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
 	return &AudioManager{
-		introDir:      "final_intros",
+		introDir:      "assets/final_intros",
 		cacheDir:      "audio_cache",
 		introURLs:     []string{}, // Will be populated with hosted URLs
 		enhancedMixer: NewEnhancedIntroMixer(elevenLabsKey),
 		elevenLabsKey: elevenLabsKey,
+		voiceManager:  config.NewVoiceManager(),
 	}
 }
 
-// GetRandomIntroURL returns a URL to an intro that matches the daily voice
+// GetRandomIntroURL returns a URL to an intro using the daily voice
 // The intro is selected deterministically based on the day to ensure consistency
 // Also returns the voice ID to ensure other tracks use the same voice
 func (am *AudioManager) GetRandomIntroURL(baseURL string) (string, string) {
-	// Get the daily voice
-	voiceManager := config.NewVoiceManager()
-	dailyVoice := voiceManager.GetDailyVoice()
+	// Get the daily voice from the voice manager
+	dailyVoice := am.voiceManager.GetDailyVoice()
+	voiceID := dailyVoice.ID
+	voiceName := dailyVoice.Name
 
 	// Check if we should use enhanced intro (with local sound effects)
 	if am.shouldUseEnhancedIntro() {
-		return am.getEnhancedIntroURL(baseURL, dailyVoice.ID)
+		return am.getEnhancedIntroURL(baseURL, voiceID)
 	}
 
 	// All available intro files for all voices
@@ -54,49 +57,20 @@ func (am *AudioManager) GetRandomIntroURL(baseURL string) (string, string) {
 		// Antoni (American)
 		"intro_00_Antoni.mp3", "intro_01_Antoni.mp3", "intro_02_Antoni.mp3", "intro_03_Antoni.mp3",
 		"intro_04_Antoni.mp3", "intro_05_Antoni.mp3", "intro_06_Antoni.mp3", "intro_07_Antoni.mp3",
-		// Charlotte (Australian)
-		"intro_00_Charlotte.mp3", "intro_01_Charlotte.mp3", "intro_02_Charlotte.mp3", "intro_03_Charlotte.mp3",
-		"intro_04_Charlotte.mp3", "intro_05_Charlotte.mp3", "intro_06_Charlotte.mp3", "intro_07_Charlotte.mp3",
 		// Danielle
 		"intro_00_Danielle.mp3", "intro_01_Danielle.mp3", "intro_02_Danielle.mp3", "intro_03_Danielle.mp3",
 		"intro_04_Danielle.mp3", "intro_05_Danielle.mp3", "intro_06_Danielle.mp3", "intro_07_Danielle.mp3",
-		// Drake (Canadian)
-		"intro_00_Drake.mp3", "intro_01_Drake.mp3", "intro_02_Drake.mp3", "intro_03_Drake.mp3",
-		"intro_04_Drake.mp3", "intro_05_Drake.mp3", "intro_06_Drake.mp3", "intro_07_Drake.mp3",
-		// Hope
-		"intro_00_Hope.mp3", "intro_01_Hope.mp3", "intro_02_Hope.mp3", "intro_03_Hope.mp3",
-		"intro_04_Hope.mp3", "intro_05_Hope.mp3", "intro_06_Hope.mp3", "intro_07_Hope.mp3",
-		// Peter (Irish)
-		"intro_00_Peter.mp3", "intro_01_Peter.mp3", "intro_02_Peter.mp3", "intro_03_Peter.mp3",
-		"intro_04_Peter.mp3", "intro_05_Peter.mp3", "intro_06_Peter.mp3", "intro_07_Peter.mp3",
-		// Rory
-		"intro_00_Rory.mp3", "intro_01_Rory.mp3", "intro_02_Rory.mp3", "intro_03_Rory.mp3",
-		"intro_04_Rory.mp3", "intro_05_Rory.mp3", "intro_06_Rory.mp3", "intro_07_Rory.mp3",
-		// Sally (Southern U.S.)
-		"intro_00_Sally.mp3", "intro_01_Sally.mp3", "intro_02_Sally.mp3", "intro_03_Sally.mp3",
-		"intro_04_Sally.mp3", "intro_05_Sally.mp3", "intro_06_Sally.mp3", "intro_07_Sally.mp3",
 		// Stuart
 		"intro_00_Stuart.mp3", "intro_01_Stuart.mp3", "intro_02_Stuart.mp3", "intro_03_Stuart.mp3",
 		"intro_04_Stuart.mp3", "intro_05_Stuart.mp3", "intro_06_Stuart.mp3", "intro_07_Stuart.mp3",
 	}
 
-	// Filter intros by voice name
+	// Filter intros by voice name - only use intros for the daily voice
 	var voiceIntros []string
 	for _, intro := range allIntros {
-		// Check if the intro filename contains the voice name
-		if strings.Contains(intro, dailyVoice.Name) {
+		// Check if the intro filename contains the daily voice name
+		if strings.Contains(intro, voiceName) {
 			voiceIntros = append(voiceIntros, intro)
-		}
-	}
-
-	// If no intros found for this voice (e.g., Sarah), fall back to Antoni
-	if len(voiceIntros) == 0 {
-		fmt.Printf("Warning: No pre-recorded intros for voice %s, using Antoni\n", dailyVoice.Name)
-		// Default to Antoni intros if voice has no pre-recorded intros
-		for _, intro := range allIntros {
-			if strings.Contains(intro, "Antoni") {
-				voiceIntros = append(voiceIntros, intro)
-			}
 		}
 	}
 
@@ -109,21 +83,21 @@ func (am *AudioManager) GetRandomIntroURL(baseURL string) (string, string) {
 	selected := voiceIntros[introIndex]
 
 	// Return intro URL and voice ID to ensure consistency across all tracks
-	return fmt.Sprintf("%s/audio/intros/%s", baseURL, selected), dailyVoice.ID
+	return fmt.Sprintf("%s/audio/intros/%s", baseURL, selected), voiceID
 }
 
 // shouldUseEnhancedIntro checks if we should use the enhanced intro with local sound effects
 func (am *AudioManager) shouldUseEnhancedIntro() bool {
 	// Check if sound_effects directory exists
-	if _, err := os.Stat("sound_effects"); err != nil {
+	if _, err := os.Stat("assets/sound_effects"); err != nil {
 		return false
 	}
 	// Check if we have the required sound files
 	requiredFiles := []string{
-		"sound_effects/ambience/forest-ambience.mp3",
-		"sound_effects/ambience/jungle_sounds.mp3",
-		"sound_effects/ambience/morning-birdsong.mp3",
-		"sound_effects/chimes/sparkle_chime.mp3",
+		"assets/sound_effects/ambience/forest-ambience.mp3",
+		"assets/sound_effects/ambience/jungle_sounds.mp3",
+		"assets/sound_effects/ambience/morning-birdsong.mp3",
+		"assets/sound_effects/chimes/sparkle_chime.mp3",
 	}
 	for _, file := range requiredFiles {
 		if _, err := os.Stat(file); err != nil {
@@ -168,8 +142,9 @@ func (am *AudioManager) getEnhancedIntroURL(baseURL string, voiceID string) (str
 
 // getStandardIntroURL returns a standard pre-recorded intro URL (fallback)
 func (am *AudioManager) getStandardIntroURL(baseURL string, voiceID string) (string, string) {
-	voiceManager := config.NewVoiceManager()
-	dailyVoice := voiceManager.GetDailyVoice()
+	// Get the daily voice from the voice manager
+	dailyVoice := am.voiceManager.GetDailyVoice()
+	voiceName := dailyVoice.Name
 
 	// All available intro files for all voices (8 intros per voice)
 	allIntros := []string{
@@ -179,46 +154,19 @@ func (am *AudioManager) getStandardIntroURL(baseURL string, voiceID string) (str
 		// Antoni (American)
 		"intro_00_Antoni.mp3", "intro_01_Antoni.mp3", "intro_02_Antoni.mp3", "intro_03_Antoni.mp3",
 		"intro_04_Antoni.mp3", "intro_05_Antoni.mp3", "intro_06_Antoni.mp3", "intro_07_Antoni.mp3",
-		// Charlotte (Australian)
-		"intro_00_Charlotte.mp3", "intro_01_Charlotte.mp3", "intro_02_Charlotte.mp3", "intro_03_Charlotte.mp3",
-		"intro_04_Charlotte.mp3", "intro_05_Charlotte.mp3", "intro_06_Charlotte.mp3", "intro_07_Charlotte.mp3",
 		// Danielle
 		"intro_00_Danielle.mp3", "intro_01_Danielle.mp3", "intro_02_Danielle.mp3", "intro_03_Danielle.mp3",
 		"intro_04_Danielle.mp3", "intro_05_Danielle.mp3", "intro_06_Danielle.mp3", "intro_07_Danielle.mp3",
-		// Drake (Canadian)
-		"intro_00_Drake.mp3", "intro_01_Drake.mp3", "intro_02_Drake.mp3", "intro_03_Drake.mp3",
-		"intro_04_Drake.mp3", "intro_05_Drake.mp3", "intro_06_Drake.mp3", "intro_07_Drake.mp3",
-		// Hope
-		"intro_00_Hope.mp3", "intro_01_Hope.mp3", "intro_02_Hope.mp3", "intro_03_Hope.mp3",
-		"intro_04_Hope.mp3", "intro_05_Hope.mp3", "intro_06_Hope.mp3", "intro_07_Hope.mp3",
-		// Peter (Irish)
-		"intro_00_Peter.mp3", "intro_01_Peter.mp3", "intro_02_Peter.mp3", "intro_03_Peter.mp3",
-		"intro_04_Peter.mp3", "intro_05_Peter.mp3", "intro_06_Peter.mp3", "intro_07_Peter.mp3",
-		// Rory
-		"intro_00_Rory.mp3", "intro_01_Rory.mp3", "intro_02_Rory.mp3", "intro_03_Rory.mp3",
-		"intro_04_Rory.mp3", "intro_05_Rory.mp3", "intro_06_Rory.mp3", "intro_07_Rory.mp3",
-		// Sally (Southern U.S.)
-		"intro_00_Sally.mp3", "intro_01_Sally.mp3", "intro_02_Sally.mp3", "intro_03_Sally.mp3",
-		"intro_04_Sally.mp3", "intro_05_Sally.mp3", "intro_06_Sally.mp3", "intro_07_Sally.mp3",
 		// Stuart
 		"intro_00_Stuart.mp3", "intro_01_Stuart.mp3", "intro_02_Stuart.mp3", "intro_03_Stuart.mp3",
 		"intro_04_Stuart.mp3", "intro_05_Stuart.mp3", "intro_06_Stuart.mp3", "intro_07_Stuart.mp3",
 	}
 
-	// Filter intros by voice name
+	// Filter intros by voice name - only use intros for the daily voice
 	var voiceIntros []string
 	for _, intro := range allIntros {
-		if strings.Contains(intro, dailyVoice.Name) {
+		if strings.Contains(intro, voiceName) {
 			voiceIntros = append(voiceIntros, intro)
-		}
-	}
-
-	// If no intros found for this voice, fall back to Antoni
-	if len(voiceIntros) == 0 {
-		for _, intro := range allIntros {
-			if strings.Contains(intro, "Antoni") {
-				voiceIntros = append(voiceIntros, intro)
-			}
 		}
 	}
 

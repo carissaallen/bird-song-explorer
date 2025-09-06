@@ -14,7 +14,7 @@ fi
 
 VOICE_ID="$1"
 VOICE_NAME="$2"
-OUTPUT_DIR="final_intros"
+OUTPUT_DIR="assets/final_intros"
 
 # Check for ElevenLabs API key
 if [ -z "$ELEVENLABS_API_KEY" ]; then
@@ -62,12 +62,13 @@ for i in "${!INTROS[@]}"; do
         --header "Content-Type: application/json" \
         --data "{
             \"text\": \"$INTRO_TEXT\",
-            \"model_id\": \"eleven_monolingual_v1\",
+            \"model_id\": \"eleven_multilingual_v2\",
             \"voice_settings\": {
-                \"stability\": 0.75,
-                \"similarity_boost\": 0.75,
-                \"style\": 0.5,
-                \"use_speaker_boost\": true
+                \"stability\": 0.40,
+                \"similarity_boost\": 0.90,
+                \"use_speaker_boost\": true,
+                \"speed\": 1.0,
+                \"style\": 0
             }
         }" \
         --output "$OUTPUT_FILE"

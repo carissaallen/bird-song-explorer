@@ -43,7 +43,7 @@ func (h *Handler) HandleYotoWebhookV2(c *gin.Context) {
 	var deviceTimezone string
 
 	// Log successful IP-based location
-	if err == nil && location.City != "Bend" {
+	if err == nil && location.City != "London" {
 		log.Printf("Using IP-based location: %s, %s (IP: %s)\n",
 			location.City, location.Country, clientIP)
 	} else {
@@ -59,7 +59,7 @@ func (h *Handler) HandleYotoWebhookV2(c *gin.Context) {
 		if deviceTimezone != "" {
 			tzLocation := h.timezoneLocationService.GetLocationFromTimezone(deviceTimezone)
 			// Only use timezone location if it's not the default
-			if tzLocation.City != "Bend" || deviceTimezone == "America/Denver" {
+			if tzLocation.City != "London" || deviceTimezone == "Europe/London" {
 				location = tzLocation
 				fmt.Printf("Using timezone-based location: %s, %s (from timezone: %s)\n",
 					location.City, location.Country, deviceTimezone)
@@ -67,8 +67,8 @@ func (h *Handler) HandleYotoWebhookV2(c *gin.Context) {
 		}
 
 		// If still using default location, log a warning
-		if location.City == "Bend" && deviceTimezone != "America/Denver" {
-			log.Printf("WARNING: Using default location (Bend, OR) - IP: %s, Timezone: %s\n",
+		if location.City == "London" && deviceTimezone != "Europe/London" {
+			log.Printf("WARNING: Using default location (London, UK) - IP: %s, Timezone: %s\n",
 				clientIP, deviceTimezone)
 		}
 	}

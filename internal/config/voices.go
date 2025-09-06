@@ -35,8 +35,8 @@ var DefaultVoices = []VoiceProfile{
 		Language: "en-US",
 	},
 	{
-		ID:       "5GZaeOOG7yqLdoTRsaa6",
-		Name:     "Charlotte",
+		ID:       "HDA9tsk27wYi3uq0fPcK",
+		Name:     "Stuart",
 		Region:   "Australian",
 		Language: "en-AU",
 	},
@@ -46,37 +46,36 @@ var DefaultVoices = []VoiceProfile{
 		Region:   "Canadian",
 		Language: "en-CA",
 	},
-	{
-		ID:       "iCrDUkL56s3C8sCRl7wb",
-		Name:     "Hope",
-		Region:   "American",
-		Language: "en-US",
-	},
-	{
-		ID:       "hmMWXCj9K7N5mCPcRkfC",
-		Name:     "Rory",
-		Region:   "Irish",
-		Language: "en-IE",
-	},
-	{
-		ID:       "HDA9tsk27wYi3uq0fPcK",
-		Name:     "Stuart",
-		Region:   "Australian",
-		Language: "en-AU",
-	},
+	//{
+	//	ID:       "1SM7GgM6IMuvQlz2BwM3",
+	//	Name:     "Mark",
+	//	Region:   "American",
+	//	Language: "en-US",
+	//},
+	//{
+	//	ID:       "5GZaeOOG7yqLdoTRsaa6",
+	//	Name:     "Charlotte",
+	//	Region:   "Australian",
+	//	Language: "en-AU",
+	//},
+	//{
+	//	ID:       "iCrDUkL56s3C8sCRl7wb",
+	//	Name:     "Hope",
+	//	Region:   "American",
+	//	Language: "en-US",
+	//},
+	//{
+	//	ID:       "hmMWXCj9K7N5mCPcRkfC",
+	//	Name:     "Rory",
+	//	Region:   "Irish",
+	//	Language: "en-IE",
+	//},
 }
 
 // NewVoiceManager creates a new voice manager with default voices
 func NewVoiceManager() *VoiceManager {
 	return &VoiceManager{
 		availableVoices: DefaultVoices,
-	}
-}
-
-// NewVoiceManagerWithCustomVoices creates a voice manager with custom voices
-func NewVoiceManagerWithCustomVoices(voices []VoiceProfile) *VoiceManager {
-	return &VoiceManager{
-		availableVoices: voices,
 	}
 }
 

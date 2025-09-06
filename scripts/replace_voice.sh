@@ -35,7 +35,7 @@ echo "   Run: ./scripts/generate_intros_for_voice.sh <VOICE_ID> <VOICE_NAME>"
 echo "   Example: ./scripts/generate_intros_for_voice.sh ErXwobaYiN019PkySvjV Antoni"
 echo ""
 echo "STEP 3: Remove old voice intro files (optional)"
-echo "   rm final_intros/intro_*_OldVoiceName.mp3"
+echo "   rm assets/final_intros/intro_*_OldVoiceName.mp3"
 echo ""
 echo "STEP 4: Mix with nature sounds (optional)"
 echo "   go run cmd/mix_intros/main.go -all"
@@ -123,7 +123,7 @@ read -p "Remove old intro files for $OLD_NAME? (y/n): " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Removing old files..."
-    rm -f final_intros/intro_*_"${OLD_NAME}".mp3
+    rm -f assets/final_intros/intro_*_"${OLD_NAME}".mp3
     echo "✅ Old files removed"
 fi
 
@@ -140,4 +140,4 @@ echo ""
 echo "✅ Voice replacement complete!"
 echo ""
 echo "New voice $NEW_NAME is ready to use."
-echo "Test with: afplay final_intros/intro_00_${NEW_NAME}.mp3"
+echo "Test with: afplay assets/final_intros/intro_00_${NEW_NAME}.mp3"

@@ -55,10 +55,10 @@ func (s *LocationService) GetLocationFromIP(ip string) (*models.Location, error)
 
 func (s *LocationService) getDefaultLocation() *models.Location {
 	return &models.Location{
-		Latitude:  44.0582,
-		Longitude: -121.3153,
-		City:      "Bend",
-		Region:    "Oregon",
-		Country:   "United States",
+		Latitude:  51.5074,
+		Longitude: -0.1278,
+		City:      "London",
+		Region:    "England",
+		Country:   "United Kingdom",
 	}
 }

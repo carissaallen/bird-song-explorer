@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/callen/bird-song-explorer/internal/models"
 	"github.com/gin-gonic/gin"
 )
 
@@ -36,16 +37,43 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		log.Printf("DailyUpdateHandler: Successfully reached httpbin.org")
 	}
 
-	// Get today's bird for the default location
-	location, _ := h.locationService.GetLocationFromIP("")
-
-	// Get bird of the day
+	// Get a random bird from anywhere in the world
+	// We'll use a random location to get diverse birds
+	randomLocations := []struct {
+		lat, lng float64
+		name string
+	}{
+		{40.7128, -74.0060, "New York"},     // North America
+		{51.5074, -0.1278, "London"},        // Europe  
+		{-33.8688, 151.2093, "Sydney"},      // Australia
+		{35.6762, 139.6503, "Tokyo"},        // Asia
+		{-1.2921, 36.8219, "Nairobi"},       // Africa
+		{-23.5505, -46.6333, "São Paulo"},   // South America
+	}
+	
+	// Pick a random location for bird selection (changes daily)
+	now := time.Now()
+	dayIndex := (now.Year()*365 + now.YearDay()) % len(randomLocations)
+	selectedLoc := randomLocations[dayIndex]
+	
+	location := &models.Location{
+		Latitude:  selectedLoc.lat,
+		Longitude: selectedLoc.lng,
+		Region:    selectedLoc.name,
+	}
+	
+	// Get bird of the day from that region
 	bird, err := h.birdSelector.SelectBirdOfDay(location)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get bird: %v", err)})
 		return
 	}
 	log.Printf("DailyUpdateHandler: Selected bird: %s", bird.CommonName)
+	
+	// Store this as the daily global bird for fallback use
+	localDate := time.Now().Format("2006-01-02")
+	h.updateCache.SetDailyGlobalBird(localDate, bird.CommonName)
+	log.Printf("DailyUpdateHandler: Stored %s as global bird for %s", bird.CommonName, localDate)
 
 	// Get a generic intro (no bird name mentioned)
 	baseURL := fmt.Sprintf("https://%s", c.Request.Host)
@@ -68,31 +96,18 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		return
 	}
 
-	log.Printf("DailyUpdateHandler: About to update card %s with bird %s", cardID, bird.CommonName)
-	// Pass location coordinates for enhanced facts if available
-	if location != nil && location.Latitude != 0 && location.Longitude != 0 {
-		log.Printf("DailyUpdateHandler: Using location-aware update: %.4f, %.4f", location.Latitude, location.Longitude)
-		err = contentManager.UpdateExistingCardContentWithDescriptionVoiceAndLocation(
-			cardID,
-			bird.CommonName,
-			introURL,
-			bird.AudioURL,
-			bird.Description,
-			voiceID,
-			location.Latitude,
-			location.Longitude,
-		)
-	} else {
-		log.Printf("DailyUpdateHandler: Using standard update (no location)")
-		err = contentManager.UpdateExistingCardContentWithDescriptionAndVoice(
-			cardID,
-			bird.CommonName,
-			introURL,
-			bird.AudioURL,
-			bird.Description,
-			voiceID,
-		)
-	}
+	log.Printf("DailyUpdateHandler: About to update card %s with bird %s from %s", cardID, bird.CommonName, location.Region)
+	// Always use generic facts for the daily update since users are worldwide
+	// Individual users may get location-specific facts if the bird is in their region
+	log.Printf("DailyUpdateHandler: Using generic update (global audience)")
+	err = contentManager.UpdateExistingCardContentWithDescriptionAndVoice(
+		cardID,
+		bird.CommonName,
+		introURL,
+		bird.AudioURL,
+		bird.Description,
+		voiceID,
+	)
 	log.Printf("DailyUpdateHandler: Update completed (or failed)")
 
 	if err != nil {

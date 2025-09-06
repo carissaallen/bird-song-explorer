@@ -43,10 +43,13 @@ curl -X POST "https://api.elevenlabs.io/v1/text-to-speech/$VOICE_ID" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Hello, bird explorers! Today we will discover an amazing bird.",
-    "model_id": "eleven_monolingual_v1",
+    "model_id": "eleven_multilingual_v2",
     "voice_settings": {
-      "stability": 0.75,
-      "similarity_boost": 0.75
+      "stability": 0.50,
+      "similarity_boost": 0.80,
+      "use_speaker_boost": true,
+      "speed": 1.0,
+      "style": 0
     }
   }' \
   --output "test_${VOICE_NAME}.mp3"
@@ -156,5 +159,5 @@ ElevenLabs has rate limits. If you hit them:
 ### Voice Quality Issues
 If a voice doesn't sound right:
 - Adjust voice_settings (stability, similarity_boost)
-- Try different model_id (eleven_turbo_v2 for faster, eleven_monolingual_v1 for quality)
+- Try different model_id (eleven_turbo_v2 for faster, eleven_multilingual_v2 for quality)
 - Test with different intro texts

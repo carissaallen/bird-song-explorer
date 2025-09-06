@@ -20,6 +20,7 @@ type DynamicIntroGenerator struct {
 	elevenLabsKey string
 	cacheDir      string
 	httpClient    *http.Client
+	voiceManager  *config.VoiceManager
 }
 
 // IntroScript represents different intro variations
@@ -45,6 +46,7 @@ func NewDynamicIntroGenerator(elevenLabsKey string) *DynamicIntroGenerator {
 		elevenLabsKey: elevenLabsKey,
 		cacheDir:      cacheDir,
 		httpClient:    &http.Client{Timeout: 30 * time.Second},
+		voiceManager:  config.NewVoiceManager(),
 	}
 }
 
@@ -98,11 +100,13 @@ func (dig *DynamicIntroGenerator) generateSpeech(text string, voiceID string) ([
 
 	requestBody := map[string]interface{}{
 		"text":     text,
-		"model_id": "eleven_monolingual_v1",
+		"model_id": "eleven_multilingual_v2",
 		"voice_settings": map[string]interface{}{
-			"stability":        0.30, // Low for good emotional range while maintaining stability
-			"similarity_boost": 0.95, // Very high similarity to original voice
-			"speed":            0.95, // Faster, more energetic pace
+			"stability":         0.40,
+			"similarity_boost":  0.90,
+			"use_speaker_boost": true,
+			"speed":             1.0,
+			"style":             0,
 		},
 	}
 
@@ -134,20 +138,18 @@ func (dig *DynamicIntroGenerator) generateSpeech(text string, voiceID string) ([
 	return io.ReadAll(resp.Body)
 }
 
-// selectDailyVoice selects a voice based on the current day
+// selectDailyVoice returns the voice ID for the day using voice rotation
 func (dig *DynamicIntroGenerator) selectDailyVoice() string {
-	voiceManager := config.NewVoiceManager()
-	dailyVoice := voiceManager.GetDailyVoice()
-	return dailyVoice.ID
+	voice := dig.voiceManager.GetDailyVoice()
+	return voice.ID
 }
 
 // getCacheKey generates a cache key for the intro
 func (dig *DynamicIntroGenerator) getCacheKey(birdName string) string {
-	// Include date and voice in cache key for daily variation
+	// Include date in cache key for daily variation
 	now := time.Now()
 	dateStr := now.Format("2006-01-02")
-	voiceManager := config.NewVoiceManager()
-	dailyVoice := voiceManager.GetDailyVoice()
+	dailyVoice := dig.voiceManager.GetDailyVoice()
 	voice := strings.ToLower(dailyVoice.Name)
 
 	// Create a filesystem-safe bird name

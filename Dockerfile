@@ -20,10 +20,7 @@ WORKDIR /root/
 # Copy binary from builder
 COPY --from=builder /app/bird-song-explorer .
 
-COPY final_intros ./final_intros/
-COPY final_outros ./final_outros/
 COPY assets ./assets/
-COPY sound_effects ./sound_effects/
 
 EXPOSE 8080
 

@@ -96,6 +96,76 @@ func (bs *BirdSelector) SelectBirdOfDay(location *models.Location) (*models.Bird
 	return bs.getFallbackBird()
 }
 
+// GetBirdByName retrieves a bird by its common name
+func (bs *BirdSelector) GetBirdByName(commonName string) (*models.Bird, error) {
+	// Try to get bird details from Wikipedia
+	wikiSummary, err := bs.wikiClient.GetBirdSummary(commonName)
+	if err != nil {
+		// If Wikipedia fails, create a basic bird entry
+		return bs.getBirdFromXenoCanto(commonName)
+	}
+
+	// Extract scientific name from Wikipedia summary
+	scientificName := ""
+	if wikiSummary != nil && wikiSummary.Extract != "" {
+		// Look for scientific name in parentheses
+		if strings.Contains(wikiSummary.Extract, "(") && strings.Contains(wikiSummary.Extract, ")") {
+			start := strings.Index(wikiSummary.Extract, "(")
+			end := strings.Index(wikiSummary.Extract, ")")
+			if start < end && end-start < 50 {
+				potentialName := wikiSummary.Extract[start+1 : end]
+				words := strings.Fields(potentialName)
+				if len(words) == 2 && strings.Title(words[0]) == words[0] {
+					scientificName = potentialName
+				}
+			}
+		}
+	}
+
+	// Get audio recording
+	recording, err := bs.xcClient.GetBestRecording(scientificName)
+	if err != nil {
+		// Try with common name if scientific name fails
+		recording, err = bs.xcClient.GetBestRecording(commonName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get recording for %s: %w", commonName, err)
+		}
+	}
+
+	bird := &models.Bird{
+		CommonName:       commonName,
+		ScientificName:   scientificName,
+		AudioURL:         recording.File,
+		AudioAttribution: recording.Attribution,
+		Description:      wikiSummary.Extract,
+	}
+
+	// Generate basic facts
+	bird.Facts = bs.generateBirdFacts(bird)
+
+	return bird, nil
+}
+
+// getBirdFromXenoCanto gets bird info using only XenoCanto (fallback)
+func (bs *BirdSelector) getBirdFromXenoCanto(commonName string) (*models.Bird, error) {
+	recording, err := bs.xcClient.GetBestRecording(commonName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get recording for %s: %w", commonName, err)
+	}
+
+	bird := &models.Bird{
+		CommonName:       commonName,
+		AudioURL:         recording.File,
+		AudioAttribution: recording.Attribution,
+		Description:      fmt.Sprintf("The %s is a fascinating bird with unique characteristics.", commonName),
+	}
+
+	// Generate basic facts
+	bird.Facts = bs.generateBirdFacts(bird)
+
+	return bird, nil
+}
+
 func (bs *BirdSelector) getFallbackBird() (*models.Bird, error) {
 	commonBirds := []struct {
 		common     string

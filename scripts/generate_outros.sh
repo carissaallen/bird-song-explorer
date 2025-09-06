@@ -14,7 +14,7 @@ fi
 
 VOICE_ID="${1:-ErXwobaYiN019PkySvjV}"
 VOICE_NAME="${2:-Antoni}"
-OUTPUT_DIR="final_outros"
+OUTPUT_DIR="assets/final_outros"
 
 mkdir -p "$OUTPUT_DIR"
 
@@ -42,10 +42,13 @@ generate_outro() {
         --header "Content-Type: application/json" \
         --data "{
             \"text\": \"$TEXT\",
-            \"model_id\": \"eleven_monolingual_v1\",
+            \"model_id\": \"eleven_multilingual_v2\",
             \"voice_settings\": {
-                \"stability\": 0.75,
-                \"similarity_boost\": 0.75
+                \"stability\": 0.50,
+                \"similarity_boost\": 0.80,
+                \"use_speaker_boost\": true,
+                \"speed\": 1.0,
+                \"style\": 0
             }
         }" \
         --output "$OUTPUT_FILE"

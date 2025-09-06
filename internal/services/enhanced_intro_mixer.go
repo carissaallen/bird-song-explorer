@@ -23,7 +23,7 @@ type EnhancedIntroMixer struct {
 // NewEnhancedIntroMixer creates a new enhanced intro mixer
 func NewEnhancedIntroMixer(elevenLabsKey string) *EnhancedIntroMixer {
 	return &EnhancedIntroMixer{
-		soundEffectsPath: "sound_effects",
+		soundEffectsPath: "assets/sound_effects",
 		cacheDir:         "./audio_cache/enhanced_intros",
 		narrationManager: NewNarrationManager(elevenLabsKey),
 	}
@@ -136,13 +136,13 @@ func (eim *EnhancedIntroMixer) GenerateEnhancedIntroWithPreRecorded(voiceID stri
 	// Use a different seed component than voice selection for variety
 	introIndex := (daySeed * 7) % 8 // 8 intros per voice
 	introFileName := fmt.Sprintf("intro_%02d_%s.mp3", introIndex, voiceName)
-	introPath := filepath.Join("final_intros", introFileName)
+	introPath := filepath.Join("assets/final_intros", introFileName)
 
 	// Check if the intro file exists
 	if _, err := os.Stat(introPath); err != nil {
 		// Try Antoni as fallback if voice-specific intro doesn't exist
 		introFileName = fmt.Sprintf("intro_%02d_Antoni.mp3", introIndex)
-		introPath = filepath.Join("final_intros", introFileName)
+		introPath = filepath.Join("assets/final_intros", introFileName)
 		if _, err := os.Stat(introPath); err != nil {
 			return nil, fmt.Errorf("pre-recorded intro file not found: %s", introPath)
 		}

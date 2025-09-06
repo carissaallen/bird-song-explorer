@@ -35,7 +35,7 @@ func NewIntroMixer() *IntroMixer {
 
 	return &IntroMixer{
 		natureSoundsPath: natureSoundsPath,
-		introPath:        "final_intros",
+		introPath:        "assets/final_intros",
 		soundFetcher:     NewNatureSoundFetcher(),
 	}
 }
