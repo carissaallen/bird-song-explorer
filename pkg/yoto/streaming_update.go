@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 )
 
 // StreamingChapter represents a chapter with streaming tracks
@@ -35,17 +34,6 @@ type StreamingContent struct {
 	Chapters []StreamingChapter `json:"chapters"`
 }
 
-// StreamingUpdateRequest represents the request for updating with streaming tracks
-type StreamingUpdateRequest struct {
-	CardID            string           `json:"cardId"`
-	UserID            string           `json:"userId"`
-	CreatedByClientID string           `json:"createdByClientId"`
-	Title             string           `json:"title"`
-	Content           StreamingContent `json:"content"`
-	Metadata          Metadata         `json:"metadata"`
-	CreatedAt         string           `json:"createdAt"`
-	UpdatedAt         string           `json:"updatedAt"`
-}
 
 // UpdateCardWithStreamingTracks updates a card to use streaming URLs
 func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName string, baseURL string) error {
@@ -183,25 +171,19 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 		},
 	}
 
-	// Build the update request
-	now := time.Now().UTC().Format(time.RFC3339)
-	updateReq := StreamingUpdateRequest{
-		CardID:            cardID,
-		UserID:            "", // Will be filled by API
-		CreatedByClientID: cm.client.clientID,
-		Title:             fmt.Sprintf("Bird Song Explorer - %s", birdName),
-		Content: StreamingContent{
-			Chapters: chapters,
+	// Build the content creation request (without CardID)
+	contentReq := map[string]interface{}{
+		"title": fmt.Sprintf("Bird Song Explorer - %s", birdName),
+		"content": map[string]interface{}{
+			"chapters": chapters,
 		},
-		Metadata: Metadata{
-			// Use the existing Metadata structure fields
+		"metadata": map[string]interface{}{
+			"description": fmt.Sprintf("Streaming playlist for %s", birdName),
 		},
-		CreatedAt: now,
-		UpdatedAt: now,
 	}
 
 	// Marshal the request
-	jsonData, err := json.Marshal(updateReq)
+	jsonData, err := json.Marshal(contentReq)
 	if err != nil {
 		return fmt.Errorf("failed to marshal update request: %w", err)
 	}
@@ -226,11 +208,41 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("failed to update card (status %d): %s", resp.StatusCode, string(body))
+		return fmt.Errorf("failed to create streaming content (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	fmt.Printf("Successfully updated card with streaming tracks for %s\n", birdName)
-	fmt.Printf("Streaming update response (%d): %s\n", resp.StatusCode, string(body))
+	// Parse the response to get the content ID
+	var contentResp struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &contentResp); err != nil {
+		return fmt.Errorf("failed to parse content response: %w", err)
+	}
+
+	fmt.Printf("Successfully created streaming content with ID %s for %s\n", contentResp.ID, birdName)
+	
+	// Now associate the content with the card
+	associateURL := fmt.Sprintf("%s/card/%s/content/%s", cm.client.baseURL, cardID, contentResp.ID)
+	associateReq, err := http.NewRequest("POST", associateURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create associate request: %w", err)
+	}
+	
+	associateReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cm.client.accessToken))
+	
+	associateResp, err := cm.client.httpClient.Do(associateReq)
+	if err != nil {
+		return fmt.Errorf("failed to associate content with card: %w", err)
+	}
+	defer associateResp.Body.Close()
+	
+	associateBody, _ := io.ReadAll(associateResp.Body)
+	
+	if associateResp.StatusCode != http.StatusOK && associateResp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("failed to associate content with card (status %d): %s", associateResp.StatusCode, string(associateBody))
+	}
+	
+	fmt.Printf("Successfully associated streaming content with card %s\n", cardID)
 
 	return nil
 }
