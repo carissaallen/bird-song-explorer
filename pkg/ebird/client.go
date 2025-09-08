@@ -51,14 +51,19 @@ func NewClient(apiKey string) *Client {
 }
 
 func (c *Client) GetRecentObservations(lat, lng float64, days int) ([]Observation, error) {
+	return c.GetRecentObservationsWithRadius(lat, lng, 50, days)
+}
+
+// GetRecentObservationsWithRadius gets recent bird observations within a specified radius
+func (c *Client) GetRecentObservationsWithRadius(lat, lng float64, radiusKm, days int) ([]Observation, error) {
 	endpoint := fmt.Sprintf("%s/data/obs/geo/recent", baseURL)
 
 	params := url.Values{}
 	params.Add("lat", fmt.Sprintf("%.4f", lat))
 	params.Add("lng", fmt.Sprintf("%.4f", lng))
-	params.Add("dist", "50")
+	params.Add("dist", fmt.Sprintf("%d", radiusKm))
 	params.Add("back", fmt.Sprintf("%d", days))
-	params.Add("maxResults", "100")
+	params.Add("maxResults", "200")  // Increase for wider searches
 
 	fullURL := fmt.Sprintf("%s?%s", endpoint, params.Encode())
 

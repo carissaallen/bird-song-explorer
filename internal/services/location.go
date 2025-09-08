@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/callen/bird-song-explorer/internal/models"
@@ -16,33 +17,40 @@ func NewLocationService() *LocationService {
 
 func (s *LocationService) GetLocationFromIP(ip string) (*models.Location, error) {
 	if ip == "" || ip == "::1" || ip == "127.0.0.1" {
-		return s.getDefaultLocation(), nil
+		return nil, fmt.Errorf("invalid IP address for geolocation: %s", ip)
 	}
 
-	url := fmt.Sprintf("https://ipapi.co/%s/json/", ip)
+	// Using ip-api.com instead of ipapi.co (better rate limits for free tier)
+	url := fmt.Sprintf("http://ip-api.com/json/%s", ip)
 	resp, err := http.Get(url)
 	if err != nil {
-		return s.getDefaultLocation(), nil
+		log.Printf("[LOCATION] Failed to get IP location for %s: %v", ip, err)
+		return nil, fmt.Errorf("failed to get IP location: %w", err)
 	}
 	defer resp.Body.Close()
 
 	var result struct {
+		Status    string  `json:"status"`
 		City      string  `json:"city"`
-		Region    string  `json:"region"`
-		Country   string  `json:"country_name"`
-		Latitude  float64 `json:"latitude"`
-		Longitude float64 `json:"longitude"`
-		Error     bool    `json:"error"`
+		Region    string  `json:"regionName"`
+		Country   string  `json:"country"`
+		Latitude  float64 `json:"lat"`
+		Longitude float64 `json:"lon"`
+		Message   string  `json:"message"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return s.getDefaultLocation(), nil
+		log.Printf("[LOCATION] Failed to decode IP location response: %v", err)
+		return nil, fmt.Errorf("failed to decode location response: %w", err)
 	}
 
-	if result.Error {
-		return s.getDefaultLocation(), nil
+	if result.Status != "success" {
+		log.Printf("[LOCATION] IP geolocation failed for %s: %s", ip, result.Message)
+		return nil, fmt.Errorf("IP geolocation failed: %s", result.Message)
 	}
 
+	log.Printf("[LOCATION] Successfully resolved IP %s to %s, %s", ip, result.City, result.Country)
+	
 	return &models.Location{
 		Latitude:  result.Latitude,
 		Longitude: result.Longitude,
@@ -51,14 +59,4 @@ func (s *LocationService) GetLocationFromIP(ip string) (*models.Location, error)
 		Country:   result.Country,
 		IPAddress: ip,
 	}, nil
-}
-
-func (s *LocationService) getDefaultLocation() *models.Location {
-	return &models.Location{
-		Latitude:  51.5074,
-		Longitude: -0.1278,
-		City:      "London",
-		Region:    "England",
-		Country:   "United Kingdom",
-	}
 }

@@ -20,6 +20,7 @@ type Handler struct {
 	config                  *config.Config
 	locationService         *services.LocationService
 	timezoneLocationService *services.TimezoneLocationService
+	timezoneLookup          *services.TimezoneLookupService
 	birdSelector            *services.BirdSelector
 	yotoClient              *yoto.Client
 	audioManager            *services.AudioManager
@@ -42,10 +43,17 @@ func NewHandler(cfg *config.Config) *Handler {
 		yotoClient.SetTokens(cfg.YotoAccessToken, cfg.YotoRefreshToken, 86400)
 	}
 
+	// Initialize timezone lookup service
+	timezoneLookup, err := services.NewTimezoneLookupService()
+	if err != nil {
+		log.Printf("Failed to initialize timezone lookup service: %v, will use fallback", err)
+	}
+
 	return &Handler{
 		config:                  cfg,
 		locationService:         services.NewLocationService(),
 		timezoneLocationService: services.NewTimezoneLocationService(),
+		timezoneLookup:          timezoneLookup,
 		birdSelector:            services.NewBirdSelector(cfg.EBirdAPIKey, cfg.XenoCantoAPIKey),
 		yotoClient:              yotoClient,
 		audioManager:            services.NewAudioManager(),
@@ -87,110 +95,111 @@ func (h *Handler) GetBirdOfDay(c *gin.Context) {
 	})
 }
 
-func (h *Handler) HandleYotoWebhook(c *gin.Context) {
-	// Check if this is an OAuth callback (has 'code' query parameter)
-	if code := c.Query("code"); code != "" {
-		h.HandleOAuthCallback(c)
-		return
-	}
-
-	var webhook struct {
-		EventType string `json:"eventType"`
-		CardID    string `json:"cardId"`
-		DeviceID  string `json:"deviceId"`
-		UserID    string `json:"userId"`
-	}
-
-	if err := c.ShouldBindJSON(&webhook); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid webhook data"})
-		return
-	}
-
-	if webhook.EventType != "card.played" {
-		c.JSON(http.StatusOK, gin.H{"status": "ignored"})
-		return
-	}
-
-	cardID := webhook.CardID
-	if cardID == "" {
-		cardID = "ipHAS"
-	}
-
-	// First, try to get location from IP address (most accurate)
-	clientIP := c.ClientIP()
-	location, err := h.locationService.GetLocationFromIP(clientIP)
-	var deviceTimezone string
-
-	if err == nil && location.City != "London" {
-		log.Printf("Using IP-based location: %s, %s (IP: %s)\n",
-			location.City, location.Country, clientIP)
-	} else {
-		// If IP location failed or returned default, try device timezone as fallback
-		if webhook.DeviceID != "" {
-			deviceConfig, err := h.yotoClient.GetDeviceConfig(webhook.DeviceID)
-			if err == nil && deviceConfig != nil {
-				deviceTimezone = deviceConfig.Device.Config.GeoTimezone
-			}
-		}
-
-		// If we have a device timezone, use it
-		if deviceTimezone != "" {
-			tzLocation := h.timezoneLocationService.GetLocationFromTimezone(deviceTimezone)
-			if tzLocation.City != "London" || deviceTimezone == "Europe/London" {
-				location = tzLocation
-				log.Printf("Using timezone-based location: %s, %s (from timezone: %s)\n",
-					location.City, location.Country, deviceTimezone)
-			}
-		}
-
-		// If still using default location, log a warning
-		if location.City == "London" && deviceTimezone != "Europe/London" {
-			log.Printf("WARNING: Using default location (London, UK) - IP: %s, Timezone: %s\n",
-				clientIP, deviceTimezone)
-		}
-	}
-
-	bird, err := h.birdSelector.SelectBirdOfDay(location)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to select bird"})
-		return
-	}
-
-	// Select voice for this session (consistent throughout)
-	voice := h.narrationManager.SelectDailyVoice()
-
-	baseURL := "https://yoto-bird-song-explorer-362662614716.us-central1.run.app"
-	introFile := h.getIntroFileForVoice(voice.Name)
-	introURL := fmt.Sprintf("%s/audio/intros/%s", baseURL, introFile)
-
-	contentManager := yoto.NewContentManager(h.yotoClient)
-
-	err = contentManager.UpdateExistingCardContentWithDescriptionAndVoice(
-		cardID,
-		bird.CommonName,
-		introURL,
-		bird.AudioURL,
-		"", // No description for test
-		voice.VoiceID,
-	)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to update card",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status":         "updated",
-		"bird":           bird.CommonName,
-		"narrator":       voice.Name,
-		"location":       location.City,
-		"cardId":         cardID,
-		"deviceTimezone": deviceTimezone,
-	})
-}
+// DEPRECATED: Old webhook handler - use HandleYotoWebhookV3 instead
+// func (h *Handler) HandleYotoWebhook(c *gin.Context) {
+// 	// Check if this is an OAuth callback (has 'code' query parameter)
+// 	if code := c.Query("code"); code != "" {
+// 		h.HandleOAuthCallback(c)
+// 		return
+// 	}
+//
+// 	var webhook struct {
+// 		EventType string `json:"eventType"`
+// 		CardID    string `json:"cardId"`
+// 		DeviceID  string `json:"deviceId"`
+// 		UserID    string `json:"userId"`
+// 	}
+//
+// 	if err := c.ShouldBindJSON(&webhook); err != nil {
+// 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid webhook data"})
+// 		return
+// 	}
+//
+// 	if webhook.EventType != "card.played" {
+// 		c.JSON(http.StatusOK, gin.H{"status": "ignored"})
+// 		return
+// 	}
+//
+// 	cardID := webhook.CardID
+// 	if cardID == "" {
+// 		cardID = "ipHAS"
+// 	}
+//
+// 	// First, try to get location from IP address (most accurate)
+// 	clientIP := c.ClientIP()
+// 	location, err := h.locationService.GetLocationFromIP(clientIP)
+// 	var deviceTimezone string
+//
+// 	if err == nil && location.City != "London" {
+// 		log.Printf("Using IP-based location: %s, %s (IP: %s)\n",
+// 			location.City, location.Country, clientIP)
+// 	} else {
+// 		// If IP location failed or returned default, try device timezone as fallback
+// 		if webhook.DeviceID != "" {
+// 			deviceConfig, err := h.yotoClient.GetDeviceConfig(webhook.DeviceID)
+// 			if err == nil && deviceConfig != nil {
+// 				deviceTimezone = deviceConfig.Device.Config.GeoTimezone
+// 			}
+// 		}
+//
+// 		// If we have a device timezone, use it
+// 		if deviceTimezone != "" {
+// 			tzLocation := h.timezoneLocationService.GetLocationFromTimezone(deviceTimezone)
+// 			if tzLocation.City != "London" || deviceTimezone == "Europe/London" {
+// 				location = tzLocation
+// 				log.Printf("Using timezone-based location: %s, %s (from timezone: %s)\n",
+// 					location.City, location.Country, deviceTimezone)
+// 			}
+// 		}
+//
+// 		// If still using default location, log a warning
+// 		if location.City == "London" && deviceTimezone != "Europe/London" {
+// 			log.Printf("WARNING: Using default location (London, UK) - IP: %s, Timezone: %s\n",
+// 				clientIP, deviceTimezone)
+// 		}
+// 	}
+//
+// 	bird, err := h.birdSelector.SelectBirdOfDay(location)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to select bird"})
+// 		return
+// 	}
+//
+// 	// Select voice for this session (consistent throughout)
+// 	voice := h.narrationManager.SelectDailyVoice()
+//
+// 	baseURL := "https://yoto-bird-song-explorer-362662614716.us-central1.run.app"
+// 	introFile := h.getIntroFileForVoice(voice.Name)
+// 	introURL := fmt.Sprintf("%s/audio/intros/%s", baseURL, introFile)
+//
+// 	contentManager := yoto.NewContentManager(h.yotoClient)
+//
+// 	err = contentManager.UpdateExistingCardContentWithDescriptionAndVoice(
+// 		cardID,
+// 		bird.CommonName,
+// 		introURL,
+// 		bird.AudioURL,
+// 		"", // No description for test
+// 		voice.VoiceID,
+// 	)
+//
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{
+// 			"error":   "Failed to update card",
+// 			"details": err.Error(),
+// 		})
+// 		return
+// 	}
+//
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"status":         "updated",
+// 		"bird":           bird.CommonName,
+// 		"narrator":       voice.Name,
+// 		"location":       location.City,
+// 		"cardId":         cardID,
+// 		"deviceTimezone": deviceTimezone,
+// 	})
+// }
 
 func (h *Handler) GetRandomIntro(c *gin.Context) {
 	scheme := "http"
@@ -242,67 +251,68 @@ func (h *Handler) createTracksFromBird(bird *models.Bird) []yoto.Track {
 	return tracks
 }
 
-func (h *Handler) UpdateCardManually(c *gin.Context) {
-	cardID := c.Param("cardId")
-	if cardID == "" {
-		cardID = "ipHAS" // Default to your card
-	}
-
-	// Get location from query params or use default
-	location := &models.Location{
-		Latitude:  51.5074,
-		Longitude: -0.1278,
-		City:      "London",
-		Region:    "England",
-		Country:   "United Kingdom",
-	}
-
-	bird, err := h.birdSelector.SelectBirdOfDay(location)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to select bird",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	voice := h.narrationManager.SelectDailyVoice()
-
-	baseURL := "https://yoto-bird-song-explorer-362662614716.us-central1.run.app"
-	introFile := h.getIntroFileForVoice(voice.Name)
-	introURL := fmt.Sprintf("%s/audio/intros/%s", baseURL, introFile)
-
-	contentManager := yoto.NewContentManager(h.yotoClient)
-
-	_, voiceID := h.audioManager.GetRandomIntroURL(baseURL)
-
-	err = contentManager.UpdateExistingCardContentWithDescriptionAndVoice(
-		cardID,
-		bird.CommonName,
-		introURL,
-		bird.AudioURL,
-		"", // No description
-		voiceID,
-	)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to update card",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status":   "Card updated successfully!",
-		"cardId":   cardID,
-		"bird":     bird.CommonName,
-		"narrator": voice.Name,
-		"location": location.City,
-		"intro":    introURL,
-		"song":     bird.AudioURL,
-	})
-}
+// DEPRECATED: Manual update handler - use test-webhook endpoint instead
+// func (h *Handler) UpdateCardManually(c *gin.Context) {
+// 	cardID := c.Param("cardId")
+// 	if cardID == "" {
+// 		cardID = "ipHAS" // Default to your card
+// 	}
+//
+// 	// Get location from query params or use default
+// 	location := &models.Location{
+// 		Latitude:  51.5074,
+// 		Longitude: -0.1278,
+// 		City:      "London",
+// 		Region:    "England",
+// 		Country:   "United Kingdom",
+// 	}
+//
+// 	bird, err := h.birdSelector.SelectBirdOfDay(location)
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{
+// 			"error":   "Failed to select bird",
+// 			"details": err.Error(),
+// 		})
+// 		return
+// 	}
+//
+// 	voice := h.narrationManager.SelectDailyVoice()
+//
+// 	baseURL := "https://yoto-bird-song-explorer-362662614716.us-central1.run.app"
+// 	introFile := h.getIntroFileForVoice(voice.Name)
+// 	introURL := fmt.Sprintf("%s/audio/intros/%s", baseURL, introFile)
+//
+// 	contentManager := yoto.NewContentManager(h.yotoClient)
+//
+// 	_, voiceID := h.audioManager.GetRandomIntroURL(baseURL)
+//
+// 	err = contentManager.UpdateExistingCardContentWithDescriptionAndVoice(
+// 		cardID,
+// 		bird.CommonName,
+// 		introURL,
+// 		bird.AudioURL,
+// 		"", // No description
+// 		voiceID,
+// 	)
+//
+// 	if err != nil {
+// 		c.JSON(http.StatusInternalServerError, gin.H{
+// 			"error":   "Failed to update card",
+// 			"details": err.Error(),
+// 		})
+// 		return
+// 	}
+//
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"status":   "Card updated successfully!",
+// 		"cardId":   cardID,
+// 		"bird":     bird.CommonName,
+// 		"narrator": voice.Name,
+// 		"location": location.City,
+// 		"intro":    introURL,
+// 		"song":     bird.AudioURL,
+// 	})
+// }
 
 func (h *Handler) getIntroFileForVoice(voiceName string) string {
 	// Map voice to available intro files

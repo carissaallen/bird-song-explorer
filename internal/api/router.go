@@ -24,11 +24,21 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	v1 := router.Group("/api/v1")
 	{
 		v1.GET("/bird-of-day", handler.GetBirdOfDay)
-		v1.POST("/yoto/webhook", handler.HandleYotoWebhookV3)
+		v1.POST("/yoto/webhook", handler.HandleYotoWebhookStreaming)  // Streaming: Returns playlist when USE_STREAMING=true
+		// v1.POST("/webhook", handler.HandleYotoWebhookUnified)  // DEPRECATED: Use /api/v1/yoto/webhook
+		v1.GET("/test-webhook", handler.TestWebhookHandler)  // Test webhook simulation
 		v1.GET("/audio/intro", handler.GetRandomIntro)
-		v1.POST("/update-card/:cardId", handler.UpdateCardManually)
-		v1.POST("/daily-update", handler.DailyUpdateHandler)
+		// v1.POST("/update-card/:cardId", handler.SmartUpdateHandler)  // DEPRECATED: Use test-webhook
+		v1.POST("/daily-update", handler.DailyUpdateHandler)  // Scheduler trigger for global bird
+		// v1.POST("/smart-update", handler.SmartUpdateHandler)  // DEPRECATED: Redundant
 		v1.POST("/yoto/token/refresh", handler.HandleTokenRefresh)
+		
+		// Streaming endpoints for dynamic content
+		v1.GET("/stream/intro", handler.StreamIntro)
+		v1.GET("/stream/announcement", handler.StreamBirdAnnouncement)
+		v1.GET("/stream/bird-song", handler.StreamBirdSong)
+		v1.GET("/stream/description", handler.StreamDescription)
+		v1.GET("/stream/outro", handler.StreamOutro)
 	}
 
 	return router

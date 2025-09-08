@@ -87,6 +87,19 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 
 	// Extract intro text from the URL if it's a pre-recorded intro
 	cm.extractIntroTextFromURL(introURL)
+	
+	// Log Track 1 intro information
+	if strings.Contains(introURL, "/intro_") {
+		parts := strings.Split(introURL, "/")
+		if len(parts) > 0 {
+			fileName := parts[len(parts)-1]
+			fmt.Printf("[TRACK_1_INTRO] Using pre-recorded intro file: %s\n", fileName)
+		}
+	} else if strings.Contains(introURL, "enhanced_intros") {
+		fmt.Printf("[TRACK_1_INTRO] Using enhanced intro from cache\n")
+	} else {
+		fmt.Printf("[TRACK_1_INTRO] Using intro from URL: %s\n", introURL)
+	}
 
 	// Check if this is an enhanced intro and capture ambience data
 	cm.captureAmbienceFromEnhancedIntro(introURL)
@@ -141,18 +154,32 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		if hasValidLocation {
 			locationName := cm.getLocationName(latitude, longitude)
 			if locationName != "" {
-				fmt.Printf("[CONTENT_UPDATE] Location available (%s) - using location-aware facts\n", locationName)
+				fmt.Printf("[CONTENT_UPDATE] Location available (%s at lat:%f, lng:%f) - using location-aware facts\n", 
+					locationName, latitude, longitude)
 			} else {
-				fmt.Printf("[CONTENT_UPDATE] Location coordinates available but couldn't determine city/state - using generic facts\n")
+				fmt.Printf("[CONTENT_UPDATE] Location coordinates available (lat:%f, lng:%f) but couldn't determine city/state - using generic facts\n",
+					latitude, longitude)
 			}
 		} else {
-			fmt.Printf("[CONTENT_UPDATE] No location available - using generic bird facts without sighting claims\n")
+			fmt.Printf("[CONTENT_UPDATE] No location available (lat:%f, lng:%f) - using generic bird facts without sighting claims\n",
+				latitude, longitude)
 		}
 
-		// Use standard generator which sounds better with TTS
-		// Pass location availability flag to generateBirdDescription
-		fmt.Printf("[CONTENT_UPDATE] Using standard facts generator for better TTS quality\n")
-		descriptionData, err = cm.generateBirdDescriptionWithLocation(birdDescription, birdName, voiceID, latitude, longitude)
+		// Choose generator based on environment variable
+		generatorType := os.Getenv("BIRD_FACT_GENERATOR")
+		if generatorType == "" {
+			generatorType = "basic" // Default to basic generator
+		}
+		
+		fmt.Printf("[CONTENT_UPDATE] Using %s facts generator\n", generatorType)
+		
+		if generatorType == "enhanced" {
+			// Use enhanced generator (formerly V4)
+			descriptionData, err = cm.generateEnhancedBirdDescriptionModular(birdDescription, birdName, voiceID, latitude, longitude)
+		} else {
+			// Use basic generator (standard)
+			descriptionData, err = cm.generateBirdDescriptionWithLocation(birdDescription, birdName, voiceID, latitude, longitude)
+		}
 
 		if err != nil {
 			hasDescription = false
@@ -538,6 +565,17 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 	if voiceID == "" {
 		return nil, fmt.Errorf("voice ID is required for announcement generation")
 	}
+	
+	// Log Track 2 voice information
+	voiceManager := config.NewVoiceManager()
+	voiceName := "Unknown"
+	for _, voice := range voiceManager.GetAvailableVoices() {
+		if voice.ID == voiceID {
+			voiceName = voice.Name
+			break
+		}
+	}
+	fmt.Printf("[TRACK_2_ANNOUNCEMENT] Using voice: %s (ID: %s) for bird announcement\n", voiceName, voiceID)
 
 	// Check if we have ambience data from Track 1 (enhanced intro)
 	if cm.selectedAmbience != "" && len(cm.ambienceData) > 0 {
@@ -635,7 +673,7 @@ func (cm *ContentManager) generateOutro(birdName string, voiceID string) ([]byte
 		return nil, fmt.Errorf("voice not found for ID: %s", voiceID)
 	}
 
-	fmt.Printf("Using pre-recorded outro for %s on %s\n", voiceName, dayOfWeek.String())
+	fmt.Printf("[TRACK_5_OUTRO] Using pre-recorded outro for voice: %s (ID: %s) on %s\n", voiceName, voiceID, dayOfWeek.String())
 
 	// Use OutroIntegration to get pre-recorded outro with volume boost
 	outroIntegration := services.NewOutroIntegration()
@@ -916,6 +954,17 @@ func (cm *ContentManager) generateBirdDescriptionWithSightings(description strin
 	if voiceID == "" {
 		return nil, fmt.Errorf("voice ID is required for description generation")
 	}
+	
+	// Log Track 4 voice information for location-aware generator
+	voiceManager := config.NewVoiceManager()
+	voiceName := "Unknown"
+	for _, voice := range voiceManager.GetAvailableVoices() {
+		if voice.ID == voiceID {
+			voiceName = voice.Name
+			break
+		}
+	}
+	fmt.Printf("[TRACK_4_DESCRIPTION] Using voice: %s (ID: %s) for bird description (location-aware)\n", voiceName, voiceID)
 
 	// Extract components from the Wikipedia description
 	scientificName := ""
@@ -1114,6 +1163,17 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 	if voiceID == "" {
 		return nil, fmt.Errorf("voice ID is required for description generation")
 	}
+	
+	// Log Track 4 voice information for basic generator
+	voiceManager := config.NewVoiceManager()
+	voiceName := "Unknown"
+	for _, voice := range voiceManager.GetAvailableVoices() {
+		if voice.ID == voiceID {
+			voiceName = voice.Name
+			break
+		}
+	}
+	fmt.Printf("[TRACK_4_DESCRIPTION] Using voice: %s (ID: %s) for bird description (basic generator)\n", voiceName, voiceID)
 
 	// Extract components from the Wikipedia description
 	// The first sentence often contains the scientific name in a format like:
@@ -1227,9 +1287,119 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 	return audioData, nil
 }
 
+// generateEnhancedBirdDescriptionModular creates location-aware audio narration using the modular enhanced fact generator
+func (cm *ContentManager) generateEnhancedBirdDescriptionModular(description string, birdName string, voiceID string, latitude, longitude float64) ([]byte, error) {
+	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
+	if elevenLabsKey == "" {
+		// Fall back to basic description if no TTS available
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	ebirdAPIKey := os.Getenv("EBIRD_API_KEY")
+	if ebirdAPIKey == "" {
+		// Fall back to basic description if no eBird API
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	// Log Track 4 voice information
+	voiceManager := config.NewVoiceManager()
+	voiceName := "Unknown"
+	for _, voice := range voiceManager.GetAvailableVoices() {
+		if voice.ID == voiceID {
+			voiceName = voice.Name
+			break
+		}
+	}
+	fmt.Printf("[TRACK_4_DESCRIPTION] Using voice: %s (ID: %s) for bird description\n", voiceName, voiceID)
+	
+	// Use the modular fact generator interface
+	factGen := services.NewFactGenerator("enhanced", ebirdAPIKey)
+	
+	bird := &models.Bird{
+		CommonName:     birdName,
+		ScientificName: "", // Could be extracted from Wikipedia if needed
+		Family:         "",
+		AudioURL:       "", // Not needed for description generation
+		Description:    description,
+	}
+
+	enhancedScript := factGen.GenerateFactScript(bird, latitude, longitude)
+	fmt.Printf("[ENHANCED_FACTS] Generated script (%s generator): %d characters\n", factGen.GetGeneratorType(), len(enhancedScript))
+	fmt.Printf("[ENHANCED_FACTS] Track 4 text: %s\n", enhancedScript)
+
+	// If the script is too short or empty, fall back to basic
+	if len(enhancedScript) < 100 {
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	// Limit script length to prevent excessive TTS costs
+	maxLength := 2500
+	if len(enhancedScript) > maxLength {
+		enhancedScript = enhancedScript[:maxLength]
+		// Find the last complete sentence
+		lastPeriod := strings.LastIndex(enhancedScript, ".")
+		if lastPeriod > 0 {
+			enhancedScript = enhancedScript[:lastPeriod+1]
+		}
+	}
+
+	// Generate TTS audio
+	url := fmt.Sprintf("https://api.elevenlabs.io/v1/text-to-speech/%s", voiceID)
+
+	requestBody := map[string]interface{}{
+		"text":     enhancedScript,
+		"model_id": "eleven_multilingual_v2",
+		"voice_settings": map[string]interface{}{
+			"stability":         0.40,
+			"similarity_boost":  0.90,
+			"use_speaker_boost": true,
+			"speed":             1.0,
+			"style":             0,
+		},
+	}
+
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		fmt.Printf("[ENHANCED_FACTS] Failed to marshal request: %v\n", err)
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		fmt.Printf("[ENHANCED_FACTS] Failed to create request: %v\n", err)
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("xi-api-key", elevenLabsKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("[ENHANCED_FACTS] TTS request failed: %v\n", err)
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("[ENHANCED_FACTS] TTS API error: %d\n", resp.StatusCode)
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	audioData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("[ENHANCED_FACTS] Failed to read audio data: %v\n", err)
+		return cm.generateBirdDescription(description, birdName, voiceID)
+	}
+
+	// Store the description text for the next track (outro)
+	cm.lastDescriptionText = enhancedScript
+
+	return audioData, nil
+}
+
 // generateEnhancedBirdDescription creates location-aware audio narration using V4 fact generator
-// NOTE: This function is NOT currently used but kept for future enhancement
-// To use: replace generateBirdDescriptionWithLocation call with this function
+// DEPRECATED: Use generateEnhancedBirdDescriptionModular instead
 func (cm *ContentManager) generateEnhancedBirdDescription(description string, birdName string, voiceID string, latitude, longitude float64) ([]byte, error) {
 	elevenLabsKey := os.Getenv("ELEVENLABS_API_KEY")
 	if elevenLabsKey == "" {

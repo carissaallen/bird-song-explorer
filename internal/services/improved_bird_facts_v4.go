@@ -190,30 +190,50 @@ func (fg *ImprovedFactGeneratorV4) generateLocationIntro(bird *models.Bird, cont
 		return ""
 	}
 
-	if len(context.RecentSightings) == 0 {
-		return ""
+	// If we have recent sightings, celebrate them
+	if len(context.RecentSightings) > 0 {
+		mostRecent := context.RecentSightings[0]
+
+		// Create kid-friendly location introductions without confusing street details
+		intros := []string{
+			fmt.Sprintf("Great news! %ss have been spotted near you in %s!", bird.CommonName, context.CityName),
+			fmt.Sprintf("You're in luck! A %s was seen just %d days ago near you!", bird.CommonName, mostRecent.DaysAgo),
+			fmt.Sprintf("Exciting! %ss are active in %s!", bird.CommonName, context.CityName),
+			fmt.Sprintf("Perfect timing! %ss have been seen %d time%s near %s this month!", bird.CommonName, len(context.RecentSightings), pluralS(float64(len(context.RecentSightings))), context.CityName),
+		}
+
+		if context.Distance < 5 {
+			intros = append(intros, fmt.Sprintf("Wow! A %s was spotted less than %.1f mile%s from you!", bird.CommonName, context.Distance, pluralS(context.Distance)))
+		}
+
+		return intros[fg.rng.Intn(len(intros))]
 	}
 
-	mostRecent := context.RecentSightings[0]
-
-	// Create kid-friendly location introductions without confusing street details
-	intros := []string{
-		fmt.Sprintf("Great news! %ss have been spotted near you in %s!", bird.CommonName, context.CityName),
-		fmt.Sprintf("You're in luck! A %s was seen just %d days ago near you!", bird.CommonName, mostRecent.DaysAgo),
-		fmt.Sprintf("Exciting! %ss are active in your area!", bird.CommonName),
-		fmt.Sprintf("Perfect timing! %ss have been seen %d time%s near %s this month!", bird.CommonName, len(context.RecentSightings), pluralS(float64(len(context.RecentSightings))), context.CityName),
+	// If no recent sightings but we know the location, mention the location without claiming sightings
+	locationIntros := []string{
+		fmt.Sprintf("Hello from %s! Today we're learning about the %s!", context.CityName, bird.CommonName),
+		fmt.Sprintf("Greetings, explorer in %s! Let's discover the amazing %s!", context.CityName, bird.CommonName),
+		fmt.Sprintf("From %s, we're exploring the wonderful world of the %s!", context.CityName, bird.CommonName),
+		fmt.Sprintf("Bird explorers in %s, get ready to learn about the %s!", context.CityName, bird.CommonName),
 	}
 
-	if context.Distance < 5 {
-		intros = append(intros, fmt.Sprintf("Wow! A %s was spotted less than %.1f mile%s from you!", bird.CommonName, context.Distance, pluralS(context.Distance)))
+	// Add state-specific greeting if we have it
+	if context.StateName != "" && context.StateName != "your state" {
+		locationIntros = append(locationIntros, 
+			fmt.Sprintf("Hello from %s, %s! Time to learn about the %s!", context.CityName, context.StateName, bird.CommonName))
 	}
 
-	return intros[fg.rng.Intn(len(intros))]
+	return locationIntros[fg.rng.Intn(len(locationIntros))]
 }
 
 // generateLocalHabitatBehavior creates habitat info with local context
 func (fg *ImprovedFactGeneratorV4) generateLocalHabitatBehavior(bird *models.Bird, wikiData *wikipedia.PageSummary, context LocationContext) string {
 	baseHabitat := fg.generateEnhancedHabitatBehavior(bird, wikiData)
+
+	// Skip local context if we don't have a real location
+	if context.CityName == "your city" || context.CityName == "" || context.StateName == "your state" || context.StateName == "" {
+		return baseHabitat
+	}
 
 	// Add local context
 	if len(context.RecentSightings) > 0 {
@@ -241,10 +261,10 @@ func (fg *ImprovedFactGeneratorV4) generateLocalHabitatBehavior(bird *models.Bir
 			localTips = append(localTips, fmt.Sprintf("In %s, check local parks and nature trails!", context.CityName))
 		}
 		if waterCount > 0 {
-			localTips = append(localTips, "They love areas near water in your region!")
+			localTips = append(localTips, fmt.Sprintf("They love areas near water in %s!", context.CityName))
 		}
 		if urbanCount > 0 {
-			localTips = append(localTips, "You might even see them in backyards and gardens nearby!")
+			localTips = append(localTips, fmt.Sprintf("You might even see them in backyards and gardens in %s!", context.CityName))
 		}
 
 		if len(localTips) > 0 {
@@ -271,7 +291,8 @@ func (fg *ImprovedFactGeneratorV4) generateLocalHabitatBehavior(bird *models.Bir
 
 // generateRecentSightingsInfo creates exciting info about recent local sightings
 func (fg *ImprovedFactGeneratorV4) generateRecentSightingsInfo(bird *models.Bird, context LocationContext) string {
-	if len(context.RecentSightings) == 0 {
+	// Skip if no sightings or no real location
+	if len(context.RecentSightings) == 0 || context.CityName == "your city" || context.CityName == "" {
 		return ""
 	}
 
@@ -302,7 +323,7 @@ func (fg *ImprovedFactGeneratorV4) generateRecentSightingsInfo(bird *models.Bird
 
 	if len(context.RecentSightings) > 5 {
 		sightingPhrases = append(sightingPhrases,
-			fmt.Sprintf("Wow! %ss have been spotted %d time%s in your area this month!", bird.CommonName, thisMonth, pluralS(float64(thisMonth))))
+			fmt.Sprintf("Wow! %ss have been spotted %d time%s in %s this month!", bird.CommonName, thisMonth, pluralS(float64(thisMonth)), context.CityName))
 	}
 
 	// Mention group sightings without confusing location details
@@ -312,7 +333,7 @@ func (fg *ImprovedFactGeneratorV4) generateRecentSightingsInfo(bird *models.Bird
 			continue
 		} else if sighting.Count > 1 {
 			sightingPhrases = append(sightingPhrases,
-				fmt.Sprintf("Someone saw %d %ss together in your neighborhood!", sighting.Count, bird.CommonName))
+				fmt.Sprintf("Someone saw %d %ss together in %s!", sighting.Count, bird.CommonName, context.CityName))
 			break
 		}
 	}
@@ -344,11 +365,11 @@ func (fg *ImprovedFactGeneratorV4) generateLocalConservationInfo(bird *models.Bi
 			"Create a bird-friendly yard with native plants and fresh water!",
 		}
 	} else {
-		// Use generic phrasing
+		// Use generic phrasing - avoid location claims when we don't know location
 		localActions = []string{
-			fmt.Sprintf("Join your local Audubon Society to help protect %ss!", bird.CommonName),
-			fmt.Sprintf("Report your %s sightings to eBird to help scientists!", bird.CommonName),
-			"Participate in your local Bird Count to track populations!",
+			fmt.Sprintf("Join an Audubon Society to help protect %ss!", bird.CommonName),
+			fmt.Sprintf("Report %s sightings to eBird to help scientists!", bird.CommonName),
+			"Participate in Bird Counts to track populations!",
 			"Create a bird-friendly yard with native plants and fresh water!",
 		}
 	}

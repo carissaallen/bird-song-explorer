@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -31,21 +32,54 @@ func NewBirdSelector(ebirdAPIKey, xenoCantoAPIKey string) *BirdSelector {
 }
 
 func (bs *BirdSelector) SelectBirdOfDay(location *models.Location) (*models.Bird, error) {
-	observations, err := bs.ebirdClient.GetRecentObservations(
-		location.Latitude,
-		location.Longitude,
-		7,
-	)
-	if err != nil {
-		return bs.getFallbackBird()
+	log.Printf("[BIRD_SELECTOR] Starting bird selection for %s (lat: %f, lng: %f)", 
+		location.City, location.Latitude, location.Longitude)
+	
+	// Cascading fallback approach for better regional coverage
+	searchParams := []struct {
+		radius int
+		days   int
+		name   string
+	}{
+		{50, 30, "50km/30days"},   // First try: nearby, recent month
+		{100, 30, "100km/30days"},  // Second try: wider area, recent month
+		{150, 60, "150km/60days"},  // Third try: regional, last 2 months
+	}
+	
+	var allObservations []ebird.Observation
+	
+	for _, param := range searchParams {
+		log.Printf("[BIRD_SELECTOR] Trying %s search near %s", param.name, location.City)
+		
+		observations, err := bs.ebirdClient.GetRecentObservationsWithRadius(
+			location.Latitude,
+			location.Longitude,
+			param.radius,
+			param.days,
+		)
+		
+		if err != nil {
+			log.Printf("[BIRD_SELECTOR] eBird API error for %s search: %v", param.name, err)
+			continue
+		}
+		
+		if len(observations) > 0 {
+			log.Printf("[BIRD_SELECTOR] Found %d observations with %s search", len(observations), param.name)
+			allObservations = observations
+			break
+		}
+		
+		log.Printf("[BIRD_SELECTOR] No observations found with %s search", param.name)
+	}
+	
+	if len(allObservations) == 0 {
+		log.Printf("[BIRD_SELECTOR] No observations found after all attempts, using global fallback")
+		return bs.getGlobalFallbackBird()
 	}
 
-	if len(observations) == 0 {
-		return bs.getFallbackBird()
-	}
-
+	// Deduplicate species
 	speciesMap := make(map[string]ebird.Observation)
-	for _, obs := range observations {
+	for _, obs := range allObservations {
 		if _, exists := speciesMap[obs.SpeciesCode]; !exists {
 			speciesMap[obs.SpeciesCode] = obs
 		}
@@ -55,6 +89,8 @@ func (bs *BirdSelector) SelectBirdOfDay(location *models.Location) (*models.Bird
 	for _, obs := range speciesMap {
 		uniqueSpecies = append(uniqueSpecies, obs)
 	}
+	
+	log.Printf("[BIRD_SELECTOR] Found %d unique species to choose from", len(uniqueSpecies))
 
 	rand.Seed(time.Now().UnixNano())
 	maxAttempts := 5
@@ -93,7 +129,7 @@ func (bs *BirdSelector) SelectBirdOfDay(location *models.Location) (*models.Bird
 		return bird, nil
 	}
 
-	return bs.getFallbackBird()
+	return bs.getGlobalFallbackBird()
 }
 
 // GetBirdByName retrieves a bird by its common name
@@ -166,33 +202,59 @@ func (bs *BirdSelector) getBirdFromXenoCanto(commonName string) (*models.Bird, e
 	return bird, nil
 }
 
-func (bs *BirdSelector) getFallbackBird() (*models.Bird, error) {
-	commonBirds := []struct {
+// getGlobalFallbackBird returns a common bird found worldwide or in many regions
+func (bs *BirdSelector) getGlobalFallbackBird() (*models.Bird, error) {
+	// Mix of birds from different continents for variety
+	globalBirds := []struct {
 		common     string
 		scientific string
+		region     string
 	}{
-		{"American Robin", "Turdus migratorius"},
-		{"Northern Cardinal", "Cardinalis cardinalis"},
-		{"Blue Jay", "Cyanocitta cristata"},
-		{"House Sparrow", "Passer domesticus"},
-		{"Mourning Dove", "Zenaida macroura"},
+		// North American birds
+		{"American Robin", "Turdus migratorius", "North America"},
+		{"Northern Cardinal", "Cardinalis cardinalis", "North America"},
+		{"Blue Jay", "Cyanocitta cristata", "North America"},
+		{"Mourning Dove", "Zenaida macroura", "Americas"},
+		
+		// European birds
+		{"European Robin", "Erithacus rubecula", "Europe"},
+		{"Great Tit", "Parus major", "Europe and Asia"},
+		{"Common Blackbird", "Turdus merula", "Europe"},
+		
+		// Widespread/cosmopolitan birds
+		{"House Sparrow", "Passer domesticus", "Worldwide"},
+		{"Barn Swallow", "Hirundo rustica", "Worldwide"},
+		{"Mallard", "Anas platyrhynchos", "Northern Hemisphere"},
+		{"Rock Pigeon", "Columba livia", "Worldwide"},
+		
+		// Australian birds
+		{"Australian Magpie", "Gymnorhina tibicen", "Australia"},
+		{"Rainbow Lorikeet", "Trichoglossus moluccanus", "Australia"},
 	}
 
-	rand.Seed(time.Now().UnixNano())
-	selected := commonBirds[rand.Intn(len(commonBirds))]
+	// Use current date as seed for daily variety but consistency within a day
+	now := time.Now()
+	dayIndex := (now.Year()*365 + now.YearDay()) % len(globalBirds)
+	selected := globalBirds[dayIndex]
+	
+	log.Printf("[BIRD_SELECTOR] Selected global fallback: %s from %s", selected.common, selected.region)
 
 	recording, err := bs.xcClient.GetBestRecording(selected.scientific)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get fallback bird recording: %w", err)
+		// Try with common name as backup
+		recording, err = bs.xcClient.GetBestRecording(selected.common)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get fallback bird recording for %s: %w", selected.common, err)
+		}
 	}
 
 	bird := &models.Bird{
 		CommonName:       selected.common,
 		ScientificName:   selected.scientific,
-		Region:           "North America",
+		Region:           selected.region,
 		AudioURL:         recording.File,
 		AudioAttribution: recording.Attribution,
-		Facts:            bs.generateBirdFacts(&models.Bird{CommonName: selected.common, ScientificName: selected.scientific}),
+		Facts:            bs.generateBirdFacts(&models.Bird{CommonName: selected.common, ScientificName: selected.scientific, Region: selected.region}),
 	}
 
 	bs.enrichWithWikipedia(bird)

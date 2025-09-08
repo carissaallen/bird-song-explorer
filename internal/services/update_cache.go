@@ -15,6 +15,7 @@ type UpdateCache struct {
 // CacheEntry stores information about an update
 type CacheEntry struct {
 	BirdName    string
+	BirdAudioURL string  // Store the audio URL to avoid re-fetching
 	UpdatedAt   time.Time
 	LocationKey string
 }
@@ -138,6 +139,21 @@ func (uc *UpdateCache) SetDailyGlobalBird(date string, birdName string) {
 	}
 }
 
+// SetDailyGlobalBirdWithAudio stores the daily global bird with audio URL
+func (uc *UpdateCache) SetDailyGlobalBirdWithAudio(date string, birdName string, audioURL string) {
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+
+	// Use a special key for the global daily bird
+	key := fmt.Sprintf("GLOBAL_DAILY_%s", date)
+	uc.entries[key] = CacheEntry{
+		BirdName:     birdName,
+		BirdAudioURL: audioURL,
+		UpdatedAt:    time.Now(),
+		LocationKey:  "GLOBAL",
+	}
+}
+
 // GetDailyGlobalBird retrieves the daily global bird for fallback
 func (uc *UpdateCache) GetDailyGlobalBird(date string) (string, bool) {
 	uc.mu.RLock()
@@ -151,4 +167,19 @@ func (uc *UpdateCache) GetDailyGlobalBird(date string) (string, bool) {
 	}
 
 	return entry.BirdName, true
+}
+
+// GetDailyGlobalBirdWithAudio retrieves the daily global bird with audio URL
+func (uc *UpdateCache) GetDailyGlobalBirdWithAudio(date string) (string, string, bool) {
+	uc.mu.RLock()
+	defer uc.mu.RUnlock()
+
+	key := fmt.Sprintf("GLOBAL_DAILY_%s", date)
+	entry, exists := uc.entries[key]
+
+	if !exists {
+		return "", "", false
+	}
+
+	return entry.BirdName, entry.BirdAudioURL, true
 }
