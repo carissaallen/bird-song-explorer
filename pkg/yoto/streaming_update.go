@@ -188,9 +188,10 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 		return fmt.Errorf("failed to marshal update request: %w", err)
 	}
 
-	// Make the API request
-	url := fmt.Sprintf("%s/content", cm.client.baseURL)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	// Make the API request - PUT to update existing content
+	// The contentId should be the same as cardId for our use case
+	url := fmt.Sprintf("%s/content/%s", cm.client.baseURL, cardID)
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -208,41 +209,11 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("failed to create streaming content (status %d): %s", resp.StatusCode, string(body))
+		return fmt.Errorf("failed to update card content (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	// Parse the response to get the content ID
-	var contentResp struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(body, &contentResp); err != nil {
-		return fmt.Errorf("failed to parse content response: %w", err)
-	}
-
-	fmt.Printf("Successfully created streaming content with ID %s for %s\n", contentResp.ID, birdName)
-	
-	// Now associate the content with the card
-	associateURL := fmt.Sprintf("%s/card/%s/content/%s", cm.client.baseURL, cardID, contentResp.ID)
-	associateReq, err := http.NewRequest("POST", associateURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create associate request: %w", err)
-	}
-	
-	associateReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cm.client.accessToken))
-	
-	associateResp, err := cm.client.httpClient.Do(associateReq)
-	if err != nil {
-		return fmt.Errorf("failed to associate content with card: %w", err)
-	}
-	defer associateResp.Body.Close()
-	
-	associateBody, _ := io.ReadAll(associateResp.Body)
-	
-	if associateResp.StatusCode != http.StatusOK && associateResp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("failed to associate content with card (status %d): %s", associateResp.StatusCode, string(associateBody))
-	}
-	
-	fmt.Printf("Successfully associated streaming content with card %s\n", cardID)
+	fmt.Printf("Successfully updated card %s with streaming tracks for %s\n", cardID, birdName)
+	fmt.Printf("Update response (%d): %s\n", resp.StatusCode, string(body))
 
 	return nil
 }
