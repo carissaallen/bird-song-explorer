@@ -41,7 +41,7 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 	// Get a random bird from diverse locations with focus on US, UK, Mexico, Canada
 	randomLocations := []struct {
 		lat, lng float64
-		name string
+		name     string
 	}{
 		// United States (expanded coverage)
 		{40.7128, -74.0060, "New York"},
@@ -54,7 +54,7 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		{25.7617, -80.1918, "Miami"},
 		{42.3601, -71.0589, "Boston"},
 		{37.7749, -122.4194, "San Francisco"},
-		
+
 		// Canada (expanded coverage)
 		{43.6532, -79.3832, "Toronto"},
 		{45.5017, -73.5673, "Montreal"},
@@ -62,7 +62,7 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		{51.0447, -114.0719, "Calgary"},
 		{53.5461, -113.4938, "Edmonton"},
 		{45.4215, -75.6972, "Ottawa"},
-		
+
 		// United Kingdom (expanded coverage)
 		{51.5074, -0.1278, "London"},
 		{53.4808, -2.2426, "Manchester"},
@@ -70,7 +70,7 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		{52.4862, -1.8904, "Birmingham"},
 		{51.4545, -2.5879, "Bristol"},
 		{53.8008, -1.5491, "Leeds"},
-		
+
 		// Mexico (expanded coverage)
 		{19.4326, -99.1332, "Mexico City"},
 		{20.6597, -103.3496, "Guadalajara"},
@@ -78,7 +78,7 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		{21.1619, -86.8515, "Cancun"},
 		{32.5149, -117.0382, "Tijuana"},
 		{31.6904, -106.4245, "Ciudad Juárez"},
-		
+
 		// Other diverse locations
 		{-33.8688, 151.2093, "Sydney"},
 		{35.6762, 139.6503, "Tokyo"},
@@ -91,18 +91,18 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		{1.3521, 103.8198, "Singapore"},
 		{-34.6037, -58.3816, "Buenos Aires"},
 	}
-	
+
 	// Pick a random location for bird selection (changes daily)
 	now := time.Now()
 	dayIndex := (now.Year()*365 + now.YearDay()) % len(randomLocations)
 	selectedLoc := randomLocations[dayIndex]
-	
+
 	location := &models.Location{
 		Latitude:  selectedLoc.lat,
 		Longitude: selectedLoc.lng,
 		Region:    selectedLoc.name,
 	}
-	
+
 	// Get bird of the day from that region
 	bird, err := h.birdSelector.SelectBirdOfDay(location)
 	if err != nil {
@@ -110,7 +110,7 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		return
 	}
 	log.Printf("DailyUpdateHandler: Selected bird: %s", bird.CommonName)
-	
+
 	// Store this as the daily global bird for fallback use
 	localDate := time.Now().Format("2006-01-02")
 	h.updateCache.SetDailyGlobalBirdWithAudio(localDate, bird.CommonName, bird.AudioURL)
@@ -142,15 +142,15 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		return
 	}
 
-	log.Printf("DailyUpdateHandler: About to update card %s with bird %s (using streaming for dynamic content)", 
+	log.Printf("DailyUpdateHandler: About to update card %s with bird %s (using streaming for dynamic content)",
 		cardID, bird.CommonName)
-	
+
 	// Check if we should use streaming
 	useStreaming := os.Getenv("USE_STREAMING")
 	if useStreaming == "true" {
 		// Use streaming URLs for dynamic content
 		log.Printf("DailyUpdateHandler: Using streaming URLs for dynamic location-aware content")
-		err = contentManager.UpdateCardWithStreamingTracks(cardID, bird.CommonName, baseURL)
+		err = contentManager.UpdateCardWithStreamingTracks(cardID, bird.CommonName, baseURL, "")
 	} else {
 		// Use the old approach with pre-uploaded content
 		log.Printf("DailyUpdateHandler: Using pre-uploaded content (legacy mode)")

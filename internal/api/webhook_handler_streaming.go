@@ -11,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// HandleYotoWebhookStreaming processes webhook events and returns streaming playlist
+// HandleYotoWebhookStreaming processes webhook events and updates card with streaming URLs
 func (h *Handler) HandleYotoWebhookStreaming(c *gin.Context) {
 	var webhook struct {
 		EventType string `json:"eventType"`
@@ -49,18 +49,18 @@ func (h *Handler) HandleYotoWebhookStreaming(c *gin.Context) {
 
 	// Attempt to detect user's location
 	var userLocation *models.Location
-	
+
 	// Try IP-based location first
 	clientIP := c.ClientIP()
 	location, err := h.locationService.GetLocationFromIP(clientIP)
 	if err == nil && location != nil {
 		userLocation = location
-		log.Printf("[WEBHOOK-STREAMING] Detected location from IP %s: %s, %s", 
+		log.Printf("[WEBHOOK-STREAMING] Detected location from IP %s: %s, %s",
 			clientIP, location.City, location.Country)
 	} else {
 		log.Printf("[WEBHOOK-STREAMING] Failed to detect location from IP %s: %v", clientIP, err)
 	}
-	
+
 	// If IP detection failed, try device timezone
 	if userLocation == nil && webhook.DeviceID != "" {
 		deviceConfig, err := h.yotoClient.GetDeviceConfig(webhook.DeviceID)
@@ -69,7 +69,7 @@ func (h *Handler) HandleYotoWebhookStreaming(c *gin.Context) {
 			tzLocation := h.timezoneLocationService.GetLocationFromTimezone(deviceTimezone)
 			if tzLocation != nil {
 				userLocation = tzLocation
-				log.Printf("[WEBHOOK-STREAMING] Detected location from timezone %s: %s, %s", 
+				log.Printf("[WEBHOOK-STREAMING] Detected location from timezone %s: %s, %s",
 					deviceTimezone, tzLocation.City, tzLocation.Country)
 			}
 		}
@@ -78,10 +78,10 @@ func (h *Handler) HandleYotoWebhookStreaming(c *gin.Context) {
 	// Get a new bird for this session (not daily bird, fresh each time)
 	var bird *models.Bird
 	var err2 error
-	
+
 	if userLocation != nil {
 		// Select a regional bird for this location
-		log.Printf("[WEBHOOK-STREAMING] Selecting bird for %s (lat: %f, lng: %f)", 
+		log.Printf("[WEBHOOK-STREAMING] Selecting bird for %s (lat: %f, lng: %f)",
 			userLocation.City, userLocation.Latitude, userLocation.Longitude)
 		bird, err2 = h.birdSelector.SelectBirdOfDay(userLocation)
 		if err2 != nil {
@@ -90,7 +90,7 @@ func (h *Handler) HandleYotoWebhookStreaming(c *gin.Context) {
 			log.Printf("[WEBHOOK-STREAMING] Selected regional bird: %s for %s", bird.CommonName, userLocation.City)
 		}
 	}
-	
+
 	// If no regional bird or no location, select a global bird
 	if bird == nil {
 		log.Printf("[WEBHOOK-STREAMING] Selecting global bird")
@@ -98,7 +98,7 @@ func (h *Handler) HandleYotoWebhookStreaming(c *gin.Context) {
 			Latitude:  40.7128,
 			Longitude: -74.0060,
 			City:      "Global",
-			Region:    "Global", 
+			Region:    "Global",
 			Country:   "Global",
 		}
 		bird, err2 = h.birdSelector.SelectBirdOfDay(globalLocation)
@@ -112,133 +112,67 @@ func (h *Handler) HandleYotoWebhookStreaming(c *gin.Context) {
 		log.Printf("[WEBHOOK-STREAMING] Selected global bird: %s", bird.CommonName)
 	}
 
+	sessionID := fmt.Sprintf("%s_%d", cardID, time.Now().Unix())
+
 	// Store session information for streaming tracks
-	sessionKey := fmt.Sprintf("ip_%s", clientIP)
 	session := &StreamingSession{
-		SessionID:    sessionKey,
-		Location:     userLocation,
-		BirdName:     bird.CommonName,
-		BirdAudioURL: bird.AudioURL,
-		CreatedAt:    time.Now(),
+		SessionID:      sessionID,
+		Location:       userLocation,
+		BirdName:       bird.CommonName,
+		ScientificName: bird.ScientificName,
+		BirdAudioURL:   bird.AudioURL,
+		CreatedAt:      time.Now(),
 	}
-	
+
 	// Get voice ID for consistency across tracks
-	baseURL := fmt.Sprintf("https://%s", c.Request.Host)
-	if h.config.Environment == "development" {
-		baseURL = fmt.Sprintf("http://%s", c.Request.Host)
+	baseURL := h.config.BaseURL
+	if baseURL == "" {
+		// Fallback to request host if BASE_URL not configured
+		baseURL = fmt.Sprintf("https://%s", c.Request.Host)
+		if h.config.Environment == "development" {
+			baseURL = fmt.Sprintf("http://%s", c.Request.Host)
+		}
 	}
 	_, voiceID := h.audioManager.GetRandomIntroURL(baseURL)
 	session.VoiceID = voiceID
-	
-	// Store session
-	sessionStore[sessionKey] = session
-	log.Printf("[WEBHOOK-STREAMING] Created session %s with bird %s", sessionKey, bird.CommonName)
-	
-	// Build streaming playlist response
-	// According to Yoto docs, we need to return a playlist with streaming tracks
-	response := gin.H{
-		"title": fmt.Sprintf("Bird Song Explorer - %s", bird.CommonName),
-		"metadata": gin.H{
-			"description": fmt.Sprintf("Streaming playlist for %s", bird.CommonName),
-		},
-		"content": gin.H{
-			"chapters": []gin.H{
-				{
-					"key":   "01",
-					"title": "Introduction",
-					"overlayLabel": "1",
-					"tracks": []gin.H{
-						{
-							"key":      "01",
-							"title":    "Introduction",
-							"trackUrl": fmt.Sprintf("%s/api/v1/stream/intro", baseURL),
-							"type":     "stream",
-							"format":   "mp3",
-							"duration": 30,
-						},
-					},
-					"display": gin.H{
-						"icon16x16": "yoto:#radio",
-					},
-				},
-				{
-					"key":   "02", 
-					"title": "Today's Bird",
-					"overlayLabel": "2",
-					"tracks": []gin.H{
-						{
-							"key":      "01",
-							"title":    "Bird Announcement",
-							"trackUrl": fmt.Sprintf("%s/api/v1/stream/announcement", baseURL),
-							"type":     "stream",
-							"format":   "mp3",
-							"duration": 10,
-						},
-					},
-					"display": gin.H{
-						"icon16x16": "yoto:#binoculars",
-					},
-				},
-				{
-					"key":   "03",
-					"title": fmt.Sprintf("%s Song", bird.CommonName),
-					"overlayLabel": "3",
-					"tracks": []gin.H{
-						{
-							"key":      "01",
-							"title":    fmt.Sprintf("%s Song", bird.CommonName),
-							"trackUrl": fmt.Sprintf("%s/api/v1/stream/bird-song", baseURL),
-							"type":     "stream",
-							"format":   "mp3",
-							"duration": 30,
-						},
-					},
-					"display": gin.H{
-						"icon16x16": "yoto:#bird",
-					},
-				},
-				{
-					"key":   "04",
-					"title": "Bird Description",
-					"overlayLabel": "4",
-					"tracks": []gin.H{
-						{
-							"key":      "01",
-							"title":    "Bird Description",
-							"trackUrl": fmt.Sprintf("%s/api/v1/stream/description", baseURL),
-							"type":     "stream",
-							"format":   "mp3",
-							"duration": 60,
-						},
-					},
-					"display": gin.H{
-						"icon16x16": "yoto:#info",
-					},
-				},
-				{
-					"key":   "05",
-					"title": "See You Tomorrow",
-					"overlayLabel": "5",
-					"tracks": []gin.H{
-						{
-							"key":      "01",
-							"title":    "See You Tomorrow Explorers",
-							"trackUrl": fmt.Sprintf("%s/api/v1/stream/outro", baseURL),
-							"type":     "stream",
-							"format":   "mp3",
-							"duration": 20,
-						},
-					},
-					"display": gin.H{
-						"icon16x16": "yoto:#hiking",
-					},
-				},
-			},
-		},
+
+	// Store session with the session ID as key
+	sessionStore[sessionID] = session
+	// Also store by IP for backward compatibility
+	ipSessionKey := fmt.Sprintf("ip_%s", clientIP)
+	sessionStore[ipSessionKey] = session
+
+	log.Printf("[WEBHOOK-STREAMING] Created session %s with bird %s (scientific: %s, audio URL: %s)",
+		sessionID, bird.CommonName, bird.ScientificName, bird.AudioURL)
+
+	// Update the card content with streaming URLs for the new bird
+	// Pass the session ID so the streaming URLs can reference it
+	contentManager := h.yotoClient.NewContentManager()
+	err = contentManager.UpdateCardWithStreamingTracks(cardID, bird.CommonName, baseURL, sessionID)
+	if err != nil {
+		log.Printf("[WEBHOOK-STREAMING] Failed to update card with streaming tracks: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Failed to update card: %v", err),
+		})
+		return
 	}
-	
-	log.Printf("[WEBHOOK-STREAMING] Returning streaming playlist for %s (location: %v)", 
+
+	response := gin.H{
+		"status":  "success",
+		"message": fmt.Sprintf("Card updated with streaming tracks for %s", bird.CommonName),
+		"bird":    bird.CommonName,
+	}
+
+	if userLocation != nil {
+		response["location"] = userLocation.City
+		response["regional"] = true
+	} else {
+		response["location"] = "Global"
+		response["regional"] = false
+	}
+
+	log.Printf("[WEBHOOK-STREAMING] Successfully updated card with streaming tracks for %s (location: %v)",
 		bird.CommonName, userLocation != nil)
-	
+
 	c.JSON(http.StatusOK, response)
 }
