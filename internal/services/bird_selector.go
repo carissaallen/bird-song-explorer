@@ -32,9 +32,9 @@ func NewBirdSelector(ebirdAPIKey, xenoCantoAPIKey string) *BirdSelector {
 }
 
 func (bs *BirdSelector) SelectBirdOfDay(location *models.Location) (*models.Bird, error) {
-	log.Printf("[BIRD_SELECTOR] Starting bird selection for %s (lat: %f, lng: %f)", 
+	log.Printf("[BIRD_SELECTOR] Starting bird selection for %s (lat: %f, lng: %f)",
 		location.City, location.Latitude, location.Longitude)
-	
+
 	// Cascading fallback approach for better regional coverage
 	searchParams := []struct {
 		radius int
@@ -42,36 +42,36 @@ func (bs *BirdSelector) SelectBirdOfDay(location *models.Location) (*models.Bird
 		name   string
 	}{
 		{50, 30, "50km/30days"},   // First try: nearby, recent month
-		{100, 30, "100km/30days"},  // Second try: wider area, recent month
-		{150, 60, "150km/60days"},  // Third try: regional, last 2 months
+		{100, 30, "100km/30days"}, // Second try: wider area, recent month
+		{150, 60, "150km/60days"}, // Third try: regional, last 2 months
 	}
-	
+
 	var allObservations []ebird.Observation
-	
+
 	for _, param := range searchParams {
 		log.Printf("[BIRD_SELECTOR] Trying %s search near %s", param.name, location.City)
-		
+
 		observations, err := bs.ebirdClient.GetRecentObservationsWithRadius(
 			location.Latitude,
 			location.Longitude,
 			param.radius,
 			param.days,
 		)
-		
+
 		if err != nil {
 			log.Printf("[BIRD_SELECTOR] eBird API error for %s search: %v", param.name, err)
 			continue
 		}
-		
+
 		if len(observations) > 0 {
 			log.Printf("[BIRD_SELECTOR] Found %d observations with %s search", len(observations), param.name)
 			allObservations = observations
 			break
 		}
-		
+
 		log.Printf("[BIRD_SELECTOR] No observations found with %s search", param.name)
 	}
-	
+
 	if len(allObservations) == 0 {
 		log.Printf("[BIRD_SELECTOR] No observations found after all attempts, using global fallback")
 		return bs.getGlobalFallbackBird()
@@ -89,7 +89,7 @@ func (bs *BirdSelector) SelectBirdOfDay(location *models.Location) (*models.Bird
 	for _, obs := range speciesMap {
 		uniqueSpecies = append(uniqueSpecies, obs)
 	}
-	
+
 	log.Printf("[BIRD_SELECTOR] Found %d unique species to choose from", len(uniqueSpecies))
 
 	rand.Seed(time.Now().UnixNano())
@@ -99,11 +99,17 @@ func (bs *BirdSelector) SelectBirdOfDay(location *models.Location) (*models.Bird
 		idx := rand.Intn(len(uniqueSpecies))
 		selected := uniqueSpecies[idx]
 
+		log.Printf("[BIRD_SELECTOR] Trying bird %d/%d: %s (Scientific: %s)",
+			i+1, maxAttempts, selected.CommonName, selected.ScientificName)
+
 		recording, err := bs.xcClient.GetBestRecording(selected.ScientificName)
 		if err != nil {
+			log.Printf("[BIRD_SELECTOR] No Xeno-canto recording for %s: %v", selected.CommonName, err)
 			uniqueSpecies = append(uniqueSpecies[:idx], uniqueSpecies[idx+1:]...)
 			continue
 		}
+
+		log.Printf("[BIRD_SELECTOR] Found Xeno-canto recording for %s: %s", selected.CommonName, recording.File)
 
 		speciesInfo, _ := bs.ebirdClient.GetSpeciesInfo(selected.SpeciesCode)
 
@@ -126,6 +132,9 @@ func (bs *BirdSelector) SelectBirdOfDay(location *models.Location) (*models.Bird
 
 		bs.enrichWithWikipedia(bird)
 
+		log.Printf("[BIRD_SELECTOR] Successfully selected %s with audio URL: %s",
+			bird.CommonName, bird.AudioURL)
+
 		return bird, nil
 	}
 
@@ -134,38 +143,37 @@ func (bs *BirdSelector) SelectBirdOfDay(location *models.Location) (*models.Bird
 
 // GetBirdByName retrieves a bird by its common name
 func (bs *BirdSelector) GetBirdByName(commonName string) (*models.Bird, error) {
-	// Try to get bird details from Wikipedia
-	wikiSummary, err := bs.wikiClient.GetBirdSummary(commonName)
-	if err != nil {
-		// If Wikipedia fails, create a basic bird entry
-		return bs.getBirdFromXenoCanto(commonName)
-	}
+	scientificName := bs.getKnownScientificName(commonName)
 
-	// Extract scientific name from Wikipedia summary
-	scientificName := ""
-	if wikiSummary != nil && wikiSummary.Extract != "" {
-		// Look for scientific name in parentheses
-		if strings.Contains(wikiSummary.Extract, "(") && strings.Contains(wikiSummary.Extract, ")") {
-			start := strings.Index(wikiSummary.Extract, "(")
-			end := strings.Index(wikiSummary.Extract, ")")
-			if start < end && end-start < 50 {
-				potentialName := wikiSummary.Extract[start+1 : end]
-				words := strings.Fields(potentialName)
-				if len(words) == 2 && strings.Title(words[0]) == words[0] {
-					scientificName = potentialName
+	if scientificName == "" {
+		// Try to get bird details from Wikipedia
+		wikiSummary, err := bs.wikiClient.GetBirdSummary(commonName)
+		if err == nil && wikiSummary != nil && wikiSummary.Extract != "" {
+			if strings.Contains(wikiSummary.Extract, "(") && strings.Contains(wikiSummary.Extract, ")") {
+				start := strings.Index(wikiSummary.Extract, "(")
+				end := strings.Index(wikiSummary.Extract, ")")
+				if start < end && end-start < 50 {
+					potentialName := wikiSummary.Extract[start+1 : end]
+					words := strings.Fields(potentialName)
+					if len(words) == 2 && strings.Title(words[0]) == words[0] {
+						scientificName = potentialName
+					}
 				}
 			}
 		}
 	}
 
-	// Get audio recording
+	if scientificName == "" {
+		log.Printf("[BIRD_SELECTOR] No scientific name found for %s, cannot fetch audio", commonName)
+		return nil, fmt.Errorf("no scientific name found for %s", commonName)
+	}
+
+	log.Printf("[BIRD_SELECTOR] Fetching audio for %s (scientific: %s)", commonName, scientificName)
+
+	// Get audio recording using scientific name
 	recording, err := bs.xcClient.GetBestRecording(scientificName)
 	if err != nil {
-		// Try with common name if scientific name fails
-		recording, err = bs.xcClient.GetBestRecording(commonName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get recording for %s: %w", commonName, err)
-		}
+		return nil, fmt.Errorf("failed to get recording for %s (%s): %w", commonName, scientificName, err)
 	}
 
 	bird := &models.Bird{
@@ -173,7 +181,7 @@ func (bs *BirdSelector) GetBirdByName(commonName string) (*models.Bird, error) {
 		ScientificName:   scientificName,
 		AudioURL:         recording.File,
 		AudioAttribution: recording.Attribution,
-		Description:      wikiSummary.Extract,
+		Description:      fmt.Sprintf("The %s is a fascinating bird with unique characteristics.", commonName),
 	}
 
 	// Generate basic facts
@@ -215,18 +223,18 @@ func (bs *BirdSelector) getGlobalFallbackBird() (*models.Bird, error) {
 		{"Northern Cardinal", "Cardinalis cardinalis", "North America"},
 		{"Blue Jay", "Cyanocitta cristata", "North America"},
 		{"Mourning Dove", "Zenaida macroura", "Americas"},
-		
+
 		// European birds
 		{"European Robin", "Erithacus rubecula", "Europe"},
 		{"Great Tit", "Parus major", "Europe and Asia"},
 		{"Common Blackbird", "Turdus merula", "Europe"},
-		
+
 		// Widespread/cosmopolitan birds
 		{"House Sparrow", "Passer domesticus", "Worldwide"},
 		{"Barn Swallow", "Hirundo rustica", "Worldwide"},
 		{"Mallard", "Anas platyrhynchos", "Northern Hemisphere"},
 		{"Rock Pigeon", "Columba livia", "Worldwide"},
-		
+
 		// Australian birds
 		{"Australian Magpie", "Gymnorhina tibicen", "Australia"},
 		{"Rainbow Lorikeet", "Trichoglossus moluccanus", "Australia"},
@@ -236,7 +244,7 @@ func (bs *BirdSelector) getGlobalFallbackBird() (*models.Bird, error) {
 	now := time.Now()
 	dayIndex := (now.Year()*365 + now.YearDay()) % len(globalBirds)
 	selected := globalBirds[dayIndex]
-	
+
 	log.Printf("[BIRD_SELECTOR] Selected global fallback: %s from %s", selected.common, selected.region)
 
 	recording, err := bs.xcClient.GetBestRecording(selected.scientific)
@@ -352,6 +360,45 @@ func (bs *BirdSelector) enrichWithWikipedia(bird *models.Bird) {
 		// Fallback description if no sources have data
 		bird.Description = fmt.Sprintf("The %s is an amazing bird that you can hear in your area! Listen carefully to learn its unique song.", bird.CommonName)
 	}
+}
+
+// getKnownScientificName returns the scientific name for known common bird names
+func (bs *BirdSelector) getKnownScientificName(commonName string) string {
+	knownBirds := map[string]string{
+		// North American birds
+		"American Robin":         "Turdus migratorius",
+		"Northern Cardinal":      "Cardinalis cardinalis",
+		"Blue Jay":               "Cyanocitta cristata",
+		"Mourning Dove":          "Zenaida macroura",
+		"Cedar Waxwing":          "Bombycilla cedrorum",
+		"Nashville Warbler":      "Leiothlypis ruficapilla",
+		"Great Blue Heron":       "Ardea herodias",
+		"House Finch":            "Haemorhous mexicanus",
+		"Common Nighthawk":       "Chordeiles minor",
+		"Stilt Sandpiper":        "Calidris himantopus",
+		"Vaux's Swift":           "Chaetura vauxi",
+		"Williamson's Sapsucker": "Sphyrapicus thyroideus",
+
+		// European birds
+		"European Robin":   "Erithacus rubecula",
+		"Great Tit":        "Parus major",
+		"Common Blackbird": "Turdus merula",
+
+		// Widespread/cosmopolitan birds
+		"House Sparrow": "Passer domesticus",
+		"Barn Swallow":  "Hirundo rustica",
+		"Mallard":       "Anas platyrhynchos",
+		"Rock Pigeon":   "Columba livia",
+
+		// Australian birds
+		"Australian Magpie": "Gymnorhina tibicen",
+		"Rainbow Lorikeet":  "Trichoglossus moluccanus",
+	}
+
+	if scientific, exists := knownBirds[commonName]; exists {
+		return scientific
+	}
+	return ""
 }
 
 // cleanDescriptionText removes dates and years from description text
