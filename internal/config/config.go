@@ -10,6 +10,7 @@ import (
 type Config struct {
 	Port               string
 	Environment        string
+	BaseURL            string
 	DatabaseURL        string
 	YotoClientID       string
 	YotoAccessToken    string
@@ -33,6 +34,7 @@ func Load() *Config {
 	return &Config{
 		Port:               getEnv("PORT", "8080"),
 		Environment:        getEnv("ENV", "development"),
+		BaseURL:            getEnv("BASE_URL", ""),
 		DatabaseURL:        getEnv("DATABASE_URL", ""),
 		YotoClientID:       getEnv("YOTO_CLIENT_ID", ""),
 		YotoAccessToken:    getEnv("YOTO_ACCESS_TOKEN", ""),
