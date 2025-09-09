@@ -74,9 +74,85 @@ func (h *Handler) getOrCreateSession(c *gin.Context) *StreamingSession {
 // StreamIntro handles streaming requests for track 1 (intro)
 func (h *Handler) StreamIntro(c *gin.Context) {
 	birdName := c.Query("bird")
+	sessionID := c.Query("session")
 	session := h.getOrCreateSession(c)
 
-	if birdName != "" {
+	// Check if this is a new session or if we need a new bird
+	needNewBird := false
+	if session.BirdName == "" || session.BirdName != birdName {
+		needNewBird = true
+	}
+
+	// If we need a new bird, select one and update the card
+	if needNewBird {
+		log.Printf("[STREAMING] New session detected, selecting fresh bird for IP %s", c.ClientIP())
+
+		// Select a new bird based on location
+		var bird *models.Bird
+		var err error
+		if session.Location != nil {
+			bird, err = h.birdSelector.SelectBirdOfDay(session.Location)
+			if err != nil {
+				log.Printf("[STREAMING] Failed to select regional bird: %v", err)
+			}
+		}
+
+		// Fall back to global bird if needed
+		if bird == nil {
+			globalLocation := &models.Location{
+				Latitude:  40.7128,
+				Longitude: -74.0060,
+				City:      "Global",
+				Region:    "Global",
+				Country:   "Global",
+			}
+			bird, err = h.birdSelector.SelectBirdOfDay(globalLocation)
+			if err != nil {
+				log.Printf("[STREAMING] Failed to select global bird: %v", err)
+				// Use the bird from the URL as last resort
+				if birdName != "" {
+					session.BirdName = birdName
+				}
+			}
+		}
+
+		if bird != nil {
+			session.BirdName = bird.CommonName
+			session.ScientificName = bird.ScientificName
+			session.BirdAudioURL = bird.AudioURL
+			log.Printf("[STREAMING] Selected new bird: %s", bird.CommonName)
+
+			// Try to update the card with new streaming URLs
+			// Extract card ID from session parameter if available
+			cardID := h.config.YotoCardID
+			if sessionID != "" && strings.Contains(sessionID, "_") {
+				parts := strings.Split(sessionID, "_")
+				if len(parts) > 0 {
+					cardID = parts[0]
+				}
+			}
+
+			if cardID != "" {
+				baseURL := h.config.BaseURL
+				if baseURL == "" {
+					baseURL = fmt.Sprintf("https://%s", c.Request.Host)
+				}
+
+				// Generate new session ID for the updated card
+				newSessionID := fmt.Sprintf("%s_%d", cardID, time.Now().Unix())
+				session.SessionID = newSessionID
+
+				// Try to update the card (but don't fail if we can't)
+				contentManager := h.yotoClient.NewContentManager()
+				err := contentManager.UpdateCardWithStreamingTracks(cardID, bird.CommonName, baseURL, newSessionID)
+				if err != nil {
+					log.Printf("[STREAMING] Failed to update card (will continue with current bird): %v", err)
+				} else {
+					log.Printf("[STREAMING] Successfully updated card with new bird: %s", bird.CommonName)
+				}
+			}
+		}
+	} else if birdName != "" {
 		session.BirdName = birdName
 		log.Printf("[STREAMING] Session updated with bird: %s", birdName)
 	}
