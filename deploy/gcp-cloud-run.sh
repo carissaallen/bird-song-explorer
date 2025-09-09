@@ -33,14 +33,17 @@ gcloud run deploy $SERVICE_NAME \
   --port 8080 \
   --memory 512Mi \
   --set-env-vars="ENV=production,\
-YOTO_CLIENT_ID=qRdsgw6mmhaTWPvauY1VyE3Mkx64yaHU,\
+BASE_URL=https://bird-song-explorer-362662614716.us-central1.run.app,\
 YOTO_API_BASE_URL=https://api.yotoplay.com,\
 USE_STREAMING=true,\
-BIRD_FACT_GENERATOR=enhanced" \
+BIRD_FACT_GENERATOR=enhanced,\
+YOTO_CARD_ID=ipHAS" \
   --set-secrets="EBIRD_API_KEY=ebird-api-key:latest,\
 YOTO_ACCESS_TOKEN=yoto-access-token:latest,\
 YOTO_REFRESH_TOKEN=yoto-refresh-token:latest,\
-ELEVENLABS_API_KEY=elevenlabs-api-key:latest"
+ELEVENLABS_API_KEY=elevenlabs-api-key:latest,\
+XENOCANTO_API_KEY=xenocanto-api-key:latest,\
+YOTO_CLIENT_ID=yoto-client-id:latest"
 
 # 5. Get the URL
 echo ""
