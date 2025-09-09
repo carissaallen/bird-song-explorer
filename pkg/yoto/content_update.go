@@ -87,7 +87,7 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 
 	// Extract intro text from the URL if it's a pre-recorded intro
 	cm.extractIntroTextFromURL(introURL)
-	
+
 	// Log Track 1 intro information
 	if strings.Contains(introURL, "/intro_") {
 		parts := strings.Split(introURL, "/")
@@ -154,7 +154,7 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		if hasValidLocation {
 			locationName := cm.getLocationName(latitude, longitude)
 			if locationName != "" {
-				fmt.Printf("[CONTENT_UPDATE] Location available (%s at lat:%f, lng:%f) - using location-aware facts\n", 
+				fmt.Printf("[CONTENT_UPDATE] Location available (%s at lat:%f, lng:%f) - using location-aware facts\n",
 					locationName, latitude, longitude)
 			} else {
 				fmt.Printf("[CONTENT_UPDATE] Location coordinates available (lat:%f, lng:%f) but couldn't determine city/state - using generic facts\n",
@@ -170,9 +170,9 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		if generatorType == "" {
 			generatorType = "basic" // Default to basic generator
 		}
-		
+
 		fmt.Printf("[CONTENT_UPDATE] Using %s facts generator\n", generatorType)
-		
+
 		if generatorType == "enhanced" {
 			// Use enhanced generator (formerly V4)
 			descriptionData, err = cm.generateEnhancedBirdDescriptionModular(birdDescription, birdName, voiceID, latitude, longitude)
@@ -184,7 +184,7 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		if err != nil {
 			hasDescription = false
 		} else {
-			descriptionSha, descriptionInfo, err = cm.uploader.UploadAudioData(descriptionData, "Bird Description")
+			descriptionSha, descriptionInfo, err = cm.uploader.UploadAudioData(descriptionData, "Bird Explorer's Guide")
 			if err != nil {
 				hasDescription = false
 			} else {
@@ -220,7 +220,7 @@ func (cm *ContentManager) UpdateExistingCardContentWithDescriptionVoiceAndLocati
 		fmt.Printf("Warning: Outro data is empty\n")
 		hasOutro = false
 	} else {
-		outroSha, outroInfo, err = cm.uploader.UploadAudioData(outroData, "See You Tomorrow Explorers")
+		outroSha, outroInfo, err = cm.uploader.UploadAudioData(outroData, "See You Tomorrow, Explorers!")
 		if err != nil {
 			fmt.Printf("Warning: Failed to upload outro: %v\n", err)
 			hasOutro = false
@@ -565,7 +565,7 @@ func (cm *ContentManager) generateBirdAnnouncement(birdName string, voiceID stri
 	if voiceID == "" {
 		return nil, fmt.Errorf("voice ID is required for announcement generation")
 	}
-	
+
 	// Log Track 2 voice information
 	voiceManager := config.NewVoiceManager()
 	voiceName := "Unknown"
@@ -954,7 +954,7 @@ func (cm *ContentManager) generateBirdDescriptionWithSightings(description strin
 	if voiceID == "" {
 		return nil, fmt.Errorf("voice ID is required for description generation")
 	}
-	
+
 	// Log Track 4 voice information for location-aware generator
 	voiceManager := config.NewVoiceManager()
 	voiceName := "Unknown"
@@ -1163,7 +1163,7 @@ func (cm *ContentManager) generateBirdDescription(description string, birdName s
 	if voiceID == "" {
 		return nil, fmt.Errorf("voice ID is required for description generation")
 	}
-	
+
 	// Log Track 4 voice information for basic generator
 	voiceManager := config.NewVoiceManager()
 	voiceName := "Unknown"
@@ -1311,10 +1311,10 @@ func (cm *ContentManager) generateEnhancedBirdDescriptionModular(description str
 		}
 	}
 	fmt.Printf("[TRACK_4_DESCRIPTION] Using voice: %s (ID: %s) for bird description\n", voiceName, voiceID)
-	
+
 	// Use the modular fact generator interface
 	factGen := services.NewFactGenerator("enhanced", ebirdAPIKey)
-	
+
 	bird := &models.Bird{
 		CommonName:     birdName,
 		ScientificName: "", // Could be extracted from Wikipedia if needed

@@ -84,12 +84,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 	chapters := []StreamingChapter{
 		{
 			Key:          "01",
-			Title:        "Introduction",
+			Title:        "Welcome, Explorers!",
 			OverlayLabel: "1",
 			Tracks: []StreamingTrack{
 				{
 					Key:          "01",
-					Title:        "Introduction",
+					Title:        "Welcome, Explorers!",
 					TrackURL:     fmt.Sprintf("%s/api/v1/stream/intro?session=%s&bird=%s", baseURL, sessionID, encodedBirdName),
 					Type:         "stream",
 					Format:       "mp3",
@@ -106,12 +106,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 		},
 		{
 			Key:          "02",
-			Title:        "Today's Bird",
+			Title:        "Who's Singing Today?",
 			OverlayLabel: "2",
 			Tracks: []StreamingTrack{
 				{
 					Key:          "01",
-					Title:        "Bird Announcement",
+					Title:        "Who's Singing Today?",
 					TrackURL:     fmt.Sprintf("%s/api/v1/stream/announcement?session=%s&bird=%s", baseURL, sessionID, encodedBirdName),
 					Type:         "stream",
 					Format:       "mp3",
@@ -150,34 +150,34 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 		},
 		{
 			Key:          "04",
-			Title:        "Bird Description",
+			Title:        "Bird Explorer's Guide",
 			OverlayLabel: "4",
 			Tracks: []StreamingTrack{
 				{
 					Key:          "01",
-					Title:        "Bird Description",
+					Title:        "Bird Explorer's Guide",
 					TrackURL:     fmt.Sprintf("%s/api/v1/stream/description?session=%s&bird=%s", baseURL, sessionID, encodedBirdName),
 					Type:         "stream",
 					Format:       "mp3",
 					Duration:     60,
 					OverlayLabel: "4",
 					Display: Display{
-						Icon16x16: getRandomRadioIcon(),
+						Icon16x16: getRandomBookIcon(),
 					},
 				},
 			},
 			Display: Display{
-				Icon16x16: getRandomRadioIcon(),
+				Icon16x16: getRandomBookIcon(),
 			},
 		},
 		{
 			Key:          "05",
-			Title:        "See You Tomorrow",
+			Title:        "Happy Exploring!",
 			OverlayLabel: "5",
 			Tracks: []StreamingTrack{
 				{
 					Key:          "01",
-					Title:        "See You Tomorrow Explorers",
+					Title:        "Happy Exploring!",
 					TrackURL:     fmt.Sprintf("%s/api/v1/stream/outro?session=%s&bird=%s", baseURL, sessionID, encodedBirdName),
 					Type:         "stream",
 					Format:       "mp3",
