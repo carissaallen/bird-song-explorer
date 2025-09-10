@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 	
 	"github.com/callen/bird-song-explorer/pkg/yoto"
 )
@@ -26,7 +27,10 @@ func main() {
 	
 	fmt.Printf("Updating card %s with streaming tracks for %s...\n", cardID, birdName)
 	
-	err := cm.UpdateCardWithStreamingTracks(cardID, birdName, baseURL)
+	// Generate a test session ID
+	sessionID := fmt.Sprintf("test-manual-%d", time.Now().Unix())
+	
+	err := cm.UpdateCardWithStreamingTracks(cardID, birdName, baseURL, sessionID)
 	if err != nil {
 		log.Fatalf("Failed to update card: %v", err)
 	}

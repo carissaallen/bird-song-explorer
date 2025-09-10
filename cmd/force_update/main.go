@@ -41,7 +41,10 @@ func main() {
 	fmt.Printf("Base URL: %s\n", baseURL)
 	fmt.Printf("Timestamp: %s\n", time.Now().Format(time.RFC3339))
 	
-	err := cm.UpdateCardWithStreamingTracks(cardID, birdName, baseURL)
+	// Generate a test session ID
+	sessionID := fmt.Sprintf("test-%d", time.Now().Unix())
+	
+	err := cm.UpdateCardWithStreamingTracks(cardID, birdName, baseURL, sessionID)
 	if err != nil {
 		log.Fatalf("Failed to update card: %v", err)
 	}

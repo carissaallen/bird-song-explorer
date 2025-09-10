@@ -80,12 +80,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     30,
 					OverlayLabel: "1",
 					Display: Display{
-						IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/radio_16x16.png",
+						IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/radio_16x16.png",
 					},
 				},
 			},
 			Display: Display{
-				IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/radio_16x16.png",
+				IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/radio_16x16.png",
 			},
 		},
 		{
@@ -102,12 +102,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     10,
 					OverlayLabel: "2",
 					Display: Display{
-						IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/binoculars_16x16.png",
+						IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/binoculars_16x16.png",
 					},
 				},
 			},
 			Display: Display{
-				IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/binoculars_16x16.png",
+				IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/binoculars_16x16.png",
 			},
 		},
 		{
@@ -124,12 +124,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     30,
 					OverlayLabel: "3",
 					Display: Display{
-						IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/bird_16x16.png",
+						IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/bird_16x16.png",
 					},
 				},
 			},
 			Display: Display{
-				IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/bird_16x16.png",
+				IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/bird_16x16.png",
 			},
 		},
 		{
@@ -146,12 +146,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     60,
 					OverlayLabel: "4",
 					Display: Display{
-						IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/book_16x16.png",
+						IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/book_16x16.png",
 					},
 				},
 			},
 			Display: Display{
-				IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/book_16x16.png",
+				IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/book_16x16.png",
 			},
 		},
 		{
@@ -168,12 +168,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     20,
 					OverlayLabel: "5",
 					Display: Display{
-						IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/hiking_boot_16x16.png",
+						IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/hiking_boot_16x16.png",
 					},
 				},
 			},
 			Display: Display{
-				IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/hiking_boot_16x16.png",
+				IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/hiking_boot_16x16.png",
 			},
 		},
 	}
