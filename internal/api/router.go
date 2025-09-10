@@ -20,6 +20,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	router.GET("/audio/intros/:filename", handler.ServeIntroWithNatureSounds)
 	router.Static("/audio/outros", "./assets/final_outros")
 	router.Static("/audio/cache", "./audio_cache") // This already serves everything under audio_cache including dynamic_intros
+	router.Static("/assets/icons", "./assets/icons") // Serve icon files for dynamic icon URLs
 
 	v1 := router.Group("/api/v1")
 	{

@@ -137,7 +137,8 @@ type PlaylistTrack struct {
 }
 
 type Display struct {
-	Icon16x16 string `json:"icon16x16"`
+	Icon16x16    string `json:"icon16x16,omitempty"`
+	IconUrl16x16 string `json:"iconUrl16x16,omitempty"`
 }
 
 type Metadata struct {

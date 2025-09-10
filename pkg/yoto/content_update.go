@@ -63,6 +63,21 @@ func getRandomBookIcon() string {
 	return bookIcons[rand.Intn(len(bookIcons))]
 }
 
+// Outdoor adventure icons from yotoicons
+var hikingBootIcons = []string{
+	"yoto:#9QLMo53RFRoOYw5bUu1o-jzD5xqdEuvVF9pjhW3zI70", // Hiking boot
+	"yoto:#WQQl3nCJDGjR0Z5mCLXQD6sPJz3ZXCvvIcXcfUdSNno", // Footprints
+	"yoto:#TN3OOQmzNIYvSaQa7jDqJNHKfKGBXgECNxxJyOe37LU", // Compass
+	"yoto:#L8kOoZRN2PXpYPzlKN5mGCu5k4r3Cf0aOX2MRB4kPaw", // Mountain
+	"yoto:#HQ8m4OZA0qQjhqCzNj7uX9m7vNRXOKjTzXYQyJEHnMQ", // Star
+}
+
+// getHikingBootIcon returns a hiking boot or adventure icon
+func getHikingBootIcon() string {
+	rand.Seed(time.Now().UnixNano())
+	return hikingBootIcons[rand.Intn(len(hikingBootIcons))]
+}
+
 // UpdateExistingCardContentWithDescriptionAndVoice updates an existing MYO card with new content including bird description and specific voice
 func (cm *ContentManager) UpdateExistingCardContentWithDescriptionAndVoice(cardID string, birdName string, introURL string, birdSongURL string, birdDescription string, voiceID string) error {
 	// Call the location-aware version with zero coordinates to indicate no location available

@@ -2,13 +2,11 @@ package yoto
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 )
 
@@ -57,29 +55,15 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 		}
 	}
 
-	// Search for bird icon
-	iconMediaID := ""
-	if cm.iconSearcher != nil {
-		iconResult, err := cm.iconSearcher.SearchBirdIcon(birdName)
-		if err == nil && iconResult != "" {
-			iconMediaID = FormatIconID(iconResult)
-			fmt.Printf("Found icon for %s: %s\n", birdName, iconMediaID)
-		}
-	}
-
-	if iconMediaID == "" {
-		// Use meadowlark as default bird icon
-		iconMediaID = "yoto:#OOKWbJLOXojHvDuWdJLWs91LVP0yA9s8FBX0fQ4xP7Y"
-		fmt.Printf("No specific icon found for %s on yotoicons.com, will use meadowlark default\n", birdName)
-	}
-
 	// Use the provided session ID if available, otherwise generate one
 	if sessionID == "" {
 		sessionID = fmt.Sprintf("%s_%d", cardID, time.Now().Unix())
 	}
 
-	// URL encode the bird name for use in query parameters
 	encodedBirdName := url.QueryEscape(birdName)
+
+	fmt.Printf("[STREAMING_UPDATE] Using dynamic icon URLs with baseURL: %s\n", baseURL)
+	fmt.Printf("[STREAMING_UPDATE] Example icon URL: %s/assets/icons/hiking-boot.png\n", baseURL)
 
 	chapters := []StreamingChapter{
 		{
@@ -96,12 +80,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     30,
 					OverlayLabel: "1",
 					Display: Display{
-						Icon16x16: getRandomRadioIcon(),
+						IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/radio_16x16.png",
 					},
 				},
 			},
 			Display: Display{
-				Icon16x16: getRandomRadioIcon(),
+				IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/radio_16x16.png",
 			},
 		},
 		{
@@ -118,34 +102,34 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     10,
 					OverlayLabel: "2",
 					Display: Display{
-						Icon16x16: "yoto:#Cz1-d_jBfvwrbtt-CCyGS3T1mgASHQ8BDhzvtJ2J6Wg", // Binoculars
+						IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/binoculars_16x16.png",
 					},
 				},
 			},
 			Display: Display{
-				Icon16x16: "yoto:#Cz1-d_jBfvwrbtt-CCyGS3T1mgASHQ8BDhzvtJ2J6Wg", // Binoculars
+				IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/binoculars_16x16.png",
 			},
 		},
 		{
 			Key:          "03",
-			Title:        fmt.Sprintf("%s Song", birdName),
+			Title:        "Bird Song",
 			OverlayLabel: "3",
 			Tracks: []StreamingTrack{
 				{
 					Key:          "01",
-					Title:        fmt.Sprintf("%s Song", birdName),
+					Title:        "Bird Song",
 					TrackURL:     fmt.Sprintf("%s/api/v1/stream/bird-song?session=%s&bird=%s", baseURL, sessionID, encodedBirdName),
 					Type:         "stream",
 					Format:       "mp3",
 					Duration:     30,
 					OverlayLabel: "3",
 					Display: Display{
-						Icon16x16: iconMediaID,
+						IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/bird_16x16.png",
 					},
 				},
 			},
 			Display: Display{
-				Icon16x16: iconMediaID,
+				IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/bird_16x16.png",
 			},
 		},
 		{
@@ -162,12 +146,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     60,
 					OverlayLabel: "4",
 					Display: Display{
-						Icon16x16: getRandomBookIcon(),
+						IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/book_16x16.png",
 					},
 				},
 			},
 			Display: Display{
-				Icon16x16: getRandomBookIcon(),
+				IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/book_16x16.png",
 			},
 		},
 		{
@@ -184,49 +168,17 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     20,
 					OverlayLabel: "5",
 					Display: Display{
-						Icon16x16: "yoto:#kmmtUHk9_SEN1dTOSXJyeCjEVkxXmHwWDs36SMVqtYQ", // Hiking boot
+						IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/hiking_boot_16x16.png",
 					},
 				},
 			},
 			Display: Display{
-				Icon16x16: "yoto:#kmmtUHk9_SEN1dTOSXJyeCjEVkxXmHwWDs36SMVqtYQ", // Hiking boot
+				IconUrl16x16: "https://raw.githubusercontent.com/callen/bird-song-explorer/main/assets/icons/hiking_boot_16x16.png",
 			},
 		},
 	}
 
-	// Extract user ID and metadata from existing card
-	userID := ""
-	createdAt := ""
-	clientID := cm.client.clientID
-
-	if existingCard != nil {
-		userID = existingCard.UserID
-		createdAt = existingCard.CreatedAt
-		if existingCard.CreatedByClientID != "" {
-			clientID = existingCard.CreatedByClientID
-		}
-	}
-
-	// If no userID from card, try to extract from JWT token
-	if userID == "" && cm.client.accessToken != "" {
-		parts := strings.Split(cm.client.accessToken, ".")
-		if len(parts) >= 2 {
-			payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-			if err == nil {
-				var tokenData map[string]interface{}
-				if err := json.Unmarshal(payload, &tokenData); err == nil {
-					if sub, ok := tokenData["sub"].(string); ok {
-						userID = sub
-					}
-				}
-			}
-		}
-	}
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	if createdAt == "" {
-		createdAt = now
-	}
+	// Extract metadata from existing card (if any)
 
 	metadataMap := make(map[string]interface{})
 
@@ -236,23 +188,15 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 		}
 	}
 
-	// Build the content update request
-	// Include all fields needed for updating existing card content
+	// Build the content update request according to Yoto API spec
+	// Only cardId and content object are allowed at root level
 	contentReq := map[string]interface{}{
-		"cardId":            cardID,
-		"userId":            userID,
-		"createdByClientId": clientID,
-		"title":             "Bird Song Explorer",
+		"cardId": cardID,
 		"content": map[string]interface{}{
+			"title":    "Bird Song Explorer",
 			"chapters": chapters,
+			"metadata": metadataMap,
 		},
-		"createdAt": createdAt,
-		"updatedAt": now,
-	}
-
-	// Only add metadata if we have something to preserve (like cover)
-	if len(metadataMap) > 0 {
-		contentReq["metadata"] = metadataMap
 	}
 
 	jsonData, err := json.Marshal(contentReq)
@@ -260,14 +204,17 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 		return fmt.Errorf("failed to marshal update request: %w", err)
 	}
 
-	// Debug logging
+	// Debug logging with full request
 	fmt.Printf("[STREAMING_UPDATE] Sending request to Yoto API:\n")
 	fmt.Printf("  cardId: %s\n", cardID)
-	fmt.Printf("  userId: %s\n", userID)
-	fmt.Printf("  clientID: %s\n", clientID)
-	fmt.Printf("  createdAt: %s\n", createdAt)
-	fmt.Printf("  updatedAt: %s\n", now)
+	fmt.Printf("  title: Bird Song Explorer\n")
+	fmt.Printf("  chapters: %d\n", len(chapters))
 	fmt.Printf("  Request size: %d bytes\n", len(jsonData))
+
+	// Log the actual JSON for debugging
+	var prettyJSON bytes.Buffer
+	json.Indent(&prettyJSON, jsonData, "", "  ")
+	fmt.Printf("[STREAMING_UPDATE] Full request JSON:\n%s\n", prettyJSON.String())
 
 	url := fmt.Sprintf("%s/content", cm.client.baseURL)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
