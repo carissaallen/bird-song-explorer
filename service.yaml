@@ -1,0 +1,59 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: bird-song-explorer
+  labels:
+    cloud.googleapis.com/location: us-central1
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/secrets: |
+          - name: EBIRD_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: ebird-api-key
+                key: latest
+          - name: XENOCANTO_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: xenocanto-api-key
+                key: latest
+          - name: ELEVENLABS_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: elevenlabs-api-key
+                key: latest
+          - name: YOTO_ACCESS_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: yoto-access-token
+                key: latest
+          - name: YOTO_REFRESH_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: yoto-refresh-token
+                key: latest
+          - name: YOTO_CLIENT_ID
+            valueFrom:
+              secretKeyRef:
+                name: yoto-client-id
+                key: latest
+    spec:
+      containers:
+      - image: gcr.io/yoto-bird-song-explorer/bird-song-explorer:latest
+        env:
+        - name: ENV
+          value: "production"
+        - name: BASE_URL
+          value: "https://bird-song-explorer-362662614716.us-central1.run.app"
+        - name: YOTO_API_BASE_URL
+          value: "https://api.yotoplay.com"
+        - name: YOTO_CARD_ID
+          value: "ipHAS"
+        - name: USE_STREAMING
+          value: "true"
+        - name: BIRD_FACT_GENERATOR
+          value: "enhanced"
+        - name: SERVICE_URL
+          value: "https://bird-song-explorer-362662614716.us-central1.run.app"
