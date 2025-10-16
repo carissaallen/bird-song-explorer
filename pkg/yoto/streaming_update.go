@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"time"
@@ -36,6 +37,24 @@ type StreamingContent struct {
 	Chapters []StreamingChapter `json:"chapters"`
 }
 
+// Bird icon media IDs for Track 2
+var birdIcons = []string{
+	"yoto:#RSsi4eQvVffIDMHbq3cuKn0ebSg0X-3Y-ZxrAorxycY",
+	"yoto:#pcGl9aZOfMwiNUm8Rfu4wRYPkBuDiEB5nwwy76aVtCM",
+}
+
+// Music note icon media IDs for Track 3
+var musicNoteIcons = []string{
+	"yoto:#_WWpLHoOj6iqeREcGkJnGlsis2QSF6znM0UPFdXTjf8",
+	"yoto:#feD4F6Xi19d9HF4rEwWtkYeC655CtcHcDA0Ib5UcgNQ",
+}
+
+// getRandomIcon returns a random icon from the given array
+func getRandomIcon(icons []string) string {
+	rand.Seed(time.Now().UnixNano())
+	return icons[rand.Intn(len(icons))]
+}
+
 // UpdateCardWithStreamingTracks updates a card to use streaming URLs
 func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName string, baseURL string, sessionID string) error {
 	if err := cm.client.ensureAuthenticated(); err != nil {
@@ -62,8 +81,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 
 	encodedBirdName := url.QueryEscape(birdName)
 
-	fmt.Printf("[STREAMING_UPDATE] Using dynamic icon URLs with baseURL: %s\n", baseURL)
-	fmt.Printf("[STREAMING_UPDATE] Example icon URL: %s/assets/icons/hiking-boot.png\n", baseURL)
+	// Select random icons for each track using Yoto media IDs
+	radioIcon := getRandomIcon(radioIcons)
+	birdIcon := getRandomIcon(birdIcons)
+	musicNoteIcon := getRandomIcon(musicNoteIcons)
+	bookIcon := getRandomIcon(bookIcons)
+	hikingBootIcon := getRandomIcon(hikingBootIcons)
 
 	chapters := []StreamingChapter{
 		{
@@ -80,12 +103,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     30,
 					OverlayLabel: "1",
 					Display: Display{
-						IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/radio_16x16.png",
+						Icon16x16: radioIcon,
 					},
 				},
 			},
 			Display: Display{
-				IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/radio_16x16.png",
+				Icon16x16: radioIcon,
 			},
 		},
 		{
@@ -102,12 +125,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     10,
 					OverlayLabel: "2",
 					Display: Display{
-						IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/binoculars_16x16.png",
+						Icon16x16: birdIcon,
 					},
 				},
 			},
 			Display: Display{
-				IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/binoculars_16x16.png",
+				Icon16x16: birdIcon,
 			},
 		},
 		{
@@ -124,12 +147,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     30,
 					OverlayLabel: "3",
 					Display: Display{
-						IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/bird_16x16.png",
+						Icon16x16: musicNoteIcon,
 					},
 				},
 			},
 			Display: Display{
-				IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/bird_16x16.png",
+				Icon16x16: musicNoteIcon,
 			},
 		},
 		{
@@ -146,12 +169,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     60,
 					OverlayLabel: "4",
 					Display: Display{
-						IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/book_16x16.png",
+						Icon16x16: bookIcon,
 					},
 				},
 			},
 			Display: Display{
-				IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/book_16x16.png",
+				Icon16x16: bookIcon,
 			},
 		},
 		{
@@ -168,12 +191,12 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 					Duration:     20,
 					OverlayLabel: "5",
 					Display: Display{
-						IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/hiking_boot_16x16.png",
+						Icon16x16: hikingBootIcon,
 					},
 				},
 			},
 			Display: Display{
-				IconUrl16x16: "https://raw.githubusercontent.com/carissaallen/bird-song-explorer/convert-to-streaming/assets/icons/hiking_boot_16x16.png",
+				Icon16x16: hikingBootIcon,
 			},
 		},
 	}

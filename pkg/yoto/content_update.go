@@ -65,11 +65,7 @@ func getRandomBookIcon() string {
 
 // Outdoor adventure icons from yotoicons
 var hikingBootIcons = []string{
-	"yoto:#9QLMo53RFRoOYw5bUu1o-jzD5xqdEuvVF9pjhW3zI70", // Hiking boot
-	"yoto:#WQQl3nCJDGjR0Z5mCLXQD6sPJz3ZXCvvIcXcfUdSNno", // Footprints
-	"yoto:#TN3OOQmzNIYvSaQa7jDqJNHKfKGBXgECNxxJyOe37LU", // Compass
-	"yoto:#L8kOoZRN2PXpYPzlKN5mGCu5k4r3Cf0aOX2MRB4kPaw", // Mountain
-	"yoto:#HQ8m4OZA0qQjhqCzNj7uX9m7vNRXOKjTzXYQyJEHnMQ", // Star
+	"yoto:#09DQgICpkT6gPwG-0DFb0W4Y5NhrlOx2e_L3nLOHzpk", // Boot
 }
 
 // getHikingBootIcon returns a hiking boot or adventure icon

@@ -21,6 +21,7 @@ WORKDIR /root/
 COPY --from=builder /app/bird-song-explorer .
 
 COPY assets ./assets/
+COPY prerecorded_tts ./prerecorded_tts/
 
 EXPOSE 8080
 
