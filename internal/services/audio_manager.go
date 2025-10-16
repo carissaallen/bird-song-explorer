@@ -38,10 +38,16 @@ func NewAudioManager() *AudioManager {
 // The intro is selected deterministically based on the day to ensure consistency
 // Also returns the voice ID to ensure other tracks use the same voice
 func (am *AudioManager) GetRandomIntroURL(baseURL string) (string, string) {
-	// Get the daily voice from the voice manager
-	dailyVoice := am.voiceManager.GetDailyVoice()
-	voiceID := dailyVoice.ID
-	voiceName := dailyVoice.Name
+	// Always use Amelia for consistency in intro/outro
+	// Get Amelia's voice profile
+	ameliaVoice := am.voiceManager.GetVoiceByName("Amelia")
+	if ameliaVoice == nil {
+		// Fallback to daily voice if Amelia not found (shouldn't happen)
+		dailyVoice := am.voiceManager.GetDailyVoice()
+		ameliaVoice = &dailyVoice
+	}
+	voiceID := ameliaVoice.ID
+	voiceName := ameliaVoice.Name
 
 	// Check if we should use enhanced intro (with local sound effects)
 	if am.shouldUseEnhancedIntro() {

@@ -21,6 +21,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	router.Static("/audio/outros", "./assets/final_outros")
 	router.Static("/audio/cache", "./audio_cache") // This already serves everything under audio_cache including dynamic_intros
 	router.Static("/assets/icons", "./assets/icons") // Serve icon files for dynamic icon URLs
+	router.Static("/audio/prerecorded", "./prerecorded_tts/audio") // Serve prerecorded bird TTS files
 
 	v1 := router.Group("/api/v1")
 	{
