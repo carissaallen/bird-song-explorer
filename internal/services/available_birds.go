@@ -154,8 +154,11 @@ func (s *AvailableBirdsService) GetCyclingBird() *models.Bird {
 	}
 
 	now := time.Now()
-	daySeed := now.Year()*365 + now.YearDay()
-	birdIndex := daySeed % len(s.birds)
+	// Calculate seed based on 15-minute intervals since epoch
+	// This ensures the bird changes every 15 minutes for variety
+	minutesSinceEpoch := now.Unix() / 60
+	intervalsSinceEpoch := minutesSinceEpoch / 15
+	birdIndex := int(intervalsSinceEpoch) % len(s.birds)
 
 	selected := s.birds[birdIndex]
 

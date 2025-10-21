@@ -98,43 +98,18 @@ func (h *Handler) StreamIntro(c *gin.Context) {
 	if birdName != "" && session.BirdName != birdName {
 		session.BirdName = birdName
 	} else if session.BirdName == "" {
-		cardID := h.config.YotoCardID
-		if sessionID != "" && strings.Contains(sessionID, "_") {
-			parts := strings.Split(sessionID, "_")
-			if len(parts) > 0 {
-				cardID = parts[0]
-			}
-		}
-
-		var mostRecentSession *StreamingSession
-		var mostRecentTime time.Time
-
-		for _, existingSession := range sessionStore {
-			if existingSession.BirdName != "" &&
-				strings.HasPrefix(existingSession.SessionID, cardID+"_") &&
-				existingSession.CreatedAt.After(mostRecentTime) {
-				mostRecentSession = existingSession
-				mostRecentTime = existingSession.CreatedAt
-			}
-		}
-
-		if mostRecentSession != nil {
-			log.Printf("[STREAMING] Found recent session with bird: %s (age: %v)", mostRecentSession.BirdName, time.Since(mostRecentSession.CreatedAt))
-			session.BirdName = mostRecentSession.BirdName
-			session.ScientificName = mostRecentSession.ScientificName
+		// Fallback: Get the current cycling bird
+		bird := h.availableBirds.GetCyclingBird()
+		if bird != nil {
+			session.BirdName = bird.CommonName
+			session.ScientificName = bird.ScientificName
+			log.Printf("[STREAMING] intro: Using cycling bird: %s", bird.CommonName)
 		} else {
-			localDate := time.Now().Format("2006-01-02")
-			globalBird, _, _ := h.updateCache.GetDailyGlobalBirdWithAudio(localDate)
-			if globalBird != "" {
-				log.Printf("[STREAMING] Using global bird from cache: %s", globalBird)
-				session.BirdName = globalBird
-			} else {
-				log.Printf("[STREAMING] ERROR: No bird assigned and no recent session found. Please wait for next scheduled update.")
-				c.JSON(http.StatusServiceUnavailable, gin.H{
-					"error": "Bird content not ready yet. Please try again in a few minutes.",
-				})
-				return
-			}
+			log.Printf("[STREAMING] intro: No bird available")
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "Bird content not ready yet. Please try again in a few minutes.",
+			})
+			return
 		}
 	}
 
@@ -152,8 +127,18 @@ func (h *Handler) StreamBirdAnnouncement(c *gin.Context) {
 
 	birdName := session.BirdName
 	if birdName == "" {
-		c.Status(http.StatusBadRequest)
-		return
+		// Fallback: Get the current cycling bird
+		bird := h.availableBirds.GetCyclingBird()
+		if bird != nil {
+			birdName = bird.CommonName
+			session.BirdName = birdName
+			sessionStore[session.SessionID] = session
+			log.Printf("[STREAMING] announcement: Using cycling bird: %s", birdName)
+		} else {
+			log.Printf("[STREAMING] announcement: No bird available")
+			c.Status(http.StatusBadRequest)
+			return
+		}
 	}
 
 	birdDir := strings.ToLower(strings.ReplaceAll(birdName, " ", "_"))
@@ -168,8 +153,18 @@ func (h *Handler) StreamDescription(c *gin.Context) {
 
 	birdName := session.BirdName
 	if birdName == "" {
-		c.Status(http.StatusBadRequest)
-		return
+		// Fallback: Get the current cycling bird
+		bird := h.availableBirds.GetCyclingBird()
+		if bird != nil {
+			birdName = bird.CommonName
+			session.BirdName = birdName
+			sessionStore[session.SessionID] = session
+			log.Printf("[STREAMING] description: Using cycling bird: %s", birdName)
+		} else {
+			log.Printf("[STREAMING] description: No bird available")
+			c.Status(http.StatusBadRequest)
+			return
+		}
 	}
 
 	birdDir := strings.ToLower(strings.ReplaceAll(birdName, " ", "_"))
@@ -247,8 +242,18 @@ func (h *Handler) StreamOutro(c *gin.Context) {
 
 	birdName := session.BirdName
 	if birdName == "" {
-		c.Status(http.StatusBadRequest)
-		return
+		// Fallback: Get the current cycling bird
+		bird := h.availableBirds.GetCyclingBird()
+		if bird != nil {
+			birdName = bird.CommonName
+			session.BirdName = birdName
+			sessionStore[session.SessionID] = session
+			log.Printf("[STREAMING] outro: Using cycling bird: %s", birdName)
+		} else {
+			log.Printf("[STREAMING] outro: No bird available")
+			c.Status(http.StatusBadRequest)
+			return
+		}
 	}
 
 	birdDir := strings.ToLower(strings.ReplaceAll(birdName, " ", "_"))
