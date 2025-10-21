@@ -1,0 +1,41 @@
+{
+  "common_name": "Brown Kiwi",
+  "scientific_name": "Apteryx mantelli",
+  "family": "Apterygidae",
+  "regions": [
+    "new_zealand/north_island"
+  ],
+  "primary_habitat": "native_forests",
+  "habitats": [
+    "native forests",
+    "scrublands",
+    "grasslands",
+    "pine plantations"
+  ],
+  "conservation_status": "Vulnerable",
+  "size": {
+    "length_cm": "45-55",
+    "wingspan_cm": "0",
+    "weight_g": "1400-3300"
+  },
+  "diet": [
+    "earthworms",
+    "insects",
+    "spiders",
+    "fruit",
+    "seeds"
+  ],
+  "breeding_season": "June-February",
+  "migration_pattern": "resident",
+  "distinctive_features": [
+    "flightless with tiny vestigial wings",
+    "long curved bill with nostrils at tip",
+    "hair-like brown feathers",
+    "nocturnal habits"
+  ],
+  "fun_facts": [
+    "Cornell Cool Facts not available for this species - Brown Kiwi is endemic to New Zealand",
+    "Has the largest egg to body size ratio of any bird",
+    "National symbol of New Zealand"
+  ]
+}

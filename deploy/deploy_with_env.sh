@@ -15,11 +15,6 @@ if [ -z "$EBIRD_API_KEY" ]; then
     exit 1
 fi
 
-if [ -z "$ELEVENLABS_API_KEY" ]; then
-    echo "Error: ELEVENLABS_API_KEY is not set!"
-    exit 1
-fi
-
 echo "✅ All required API keys found"
 echo "🚀 Starting deployment..."
 

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// StreamingSession stores location data for a play session
 type StreamingSession struct {
 	SessionID      string
 	Location       *models.Location
@@ -26,302 +24,158 @@ type StreamingSession struct {
 	CreatedAt      time.Time
 }
 
-// sessionStore is a simple in-memory store for sessions (could be Redis in production)
 var sessionStore = make(map[string]*StreamingSession)
 
-// cleanupSessions removes old sessions (older than 1 hour)
 func cleanupSessions() {
 	for id, session := range sessionStore {
-		if time.Since(session.CreatedAt) > time.Hour {
+		if time.Since(session.CreatedAt) > 15*time.Minute {
 			delete(sessionStore, id)
 		}
 	}
 }
 
-// getOrCreateSession gets an existing session or creates a new one
-// Note: Caching removed - always creates fresh session for new bird selection each time
-func (h *Handler) getOrCreateSession(c *gin.Context) *StreamingSession {
-	// Always create a fresh session (no caching) - user gets new bird each time they play
-	clientIP := c.ClientIP()
-	sessionKey := fmt.Sprintf("ip_%s_%d", clientIP, time.Now().Unix())
+// CreateSessionForBird creates a new session for a specific bird
+// This ensures the icon and narration match when the card is played
+func (h *Handler) CreateSessionForBird(cardID string, birdName string) string {
+	sessionID := fmt.Sprintf("%s_%d", cardID, time.Now().Unix())
 
-	// Create new session
+	session := &StreamingSession{
+		SessionID: sessionID,
+		BirdName:  birdName,
+		CreatedAt: time.Now(),
+	}
+
+	sessionStore[sessionID] = session
+	log.Printf("[SESSION] Created session %s for bird: %s", sessionID, birdName)
+
+	go cleanupSessions()
+
+	return sessionID
+}
+
+// getOrCreateSession gets an existing session or creates a new one
+// Uses the session ID from query parameter to maintain state across tracks
+func (h *Handler) getOrCreateSession(c *gin.Context, sessionID string) *StreamingSession {
+	clientIP := c.ClientIP()
+
+	if sessionID != "" {
+		if existingSession, exists := sessionStore[sessionID]; exists {
+			if time.Since(existingSession.CreatedAt) > 15*time.Minute {
+				log.Printf("[STREAMING] Session %s expired (age: %v), creating new one", sessionID, time.Since(existingSession.CreatedAt))
+				delete(sessionStore, sessionID)
+			} else {
+				log.Printf("[STREAMING] Using existing session %s for bird: %s (age: %v)", sessionID, existingSession.BirdName, time.Since(existingSession.CreatedAt))
+				return existingSession
+			}
+		}
+	}
+
+	sessionKey := sessionID
+	if sessionKey == "" {
+		sessionKey = fmt.Sprintf("ip_%s_%d", clientIP, time.Now().Unix())
+	}
+
 	newSession := &StreamingSession{
 		SessionID: sessionKey,
 		CreatedAt: time.Now(),
 	}
 
-	// Get location from IP
 	location, err := h.locationService.GetLocationFromIP(clientIP)
 	if err == nil && location != nil {
 		newSession.Location = location
-		log.Printf("[STREAMING] Created fresh session for IP %s: %s, %s",
-			clientIP, location.City, location.Country)
-	} else {
-		log.Printf("[STREAMING] Created session for IP %s (location detection failed: %v)", clientIP, err)
 	}
 
-	// Store session temporarily for other tracks in this play session
 	sessionStore[newSession.SessionID] = newSession
 	go cleanupSessions()
 	return newSession
 }
 
-// StreamIntro handles streaming requests for track 1 (intro)
 func (h *Handler) StreamIntro(c *gin.Context) {
 	birdName := c.Query("bird")
 	sessionID := c.Query("session")
-	session := h.getOrCreateSession(c)
+	session := h.getOrCreateSession(c, sessionID)
 
-	// Check if this is a new session or if we need a new bird
-	needNewBird := false
-	if session.BirdName == "" || session.BirdName != birdName {
-		needNewBird = true
-	}
-
-	// If we need a new bird, select one and update the card
-	if needNewBird {
-		log.Printf("[STREAMING] New session detected, selecting fresh bird for IP %s", c.ClientIP())
-
-		// Select a bird from the prerecorded birds only
-		bird, err := h.selectPrerecordedBird(session.Location)
-		if err != nil {
-			log.Printf("[STREAMING] Failed to select prerecorded bird: %v", err)
-			// Use a fallback bird
-			bird = &models.Bird{
-				CommonName:     "American Robin",
-				ScientificName: "Turdus migratorius",
-				Region:         "north_america",
-			}
-		}
-
-		if bird != nil {
-			session.BirdName = bird.CommonName
-			session.ScientificName = bird.ScientificName
-			session.BirdAudioURL = bird.AudioURL
-			log.Printf("[STREAMING] Selected new bird: %s", bird.CommonName)
-
-			// Try to update the card with new streaming URLs
-			// Extract card ID from session parameter if available
-			cardID := h.config.YotoCardID
-			if sessionID != "" && strings.Contains(sessionID, "_") {
-				parts := strings.Split(sessionID, "_")
-				if len(parts) > 0 {
-					cardID = parts[0]
-				}
-			}
-
-			if cardID != "" {
-				baseURL := h.config.BaseURL
-				if baseURL == "" {
-					baseURL = fmt.Sprintf("https://%s", c.Request.Host)
-				}
-
-				// Generate new session ID for the updated card
-				newSessionID := fmt.Sprintf("%s_%d", cardID, time.Now().Unix())
-				session.SessionID = newSessionID
-
-				// Try to update the card (but don't fail if we can't)
-				contentManager := h.yotoClient.NewContentManager()
-				err := contentManager.UpdateCardWithStreamingTracks(cardID, bird.CommonName, baseURL, newSessionID)
-				if err != nil {
-					log.Printf("[STREAMING] Failed to update card (will continue with current bird): %v", err)
-				} else {
-					log.Printf("[STREAMING] Successfully updated card with new bird: %s", bird.CommonName)
-				}
-			}
-		}
-	} else if birdName != "" {
+	if birdName != "" && session.BirdName != birdName {
 		session.BirdName = birdName
-		log.Printf("[STREAMING] Session updated with bird: %s", birdName)
-	}
-
-	baseURL := h.config.BaseURL
-	if baseURL == "" {
-		// Fallback to request host if BASE_URL not configured
-		baseURL = fmt.Sprintf("https://%s", c.Request.Host)
-		if h.config.Environment == "development" {
-			baseURL = fmt.Sprintf("http://%s", c.Request.Host)
+	} else if session.BirdName == "" {
+		cardID := h.config.YotoCardID
+		if sessionID != "" && strings.Contains(sessionID, "_") {
+			parts := strings.Split(sessionID, "_")
+			if len(parts) > 0 {
+				cardID = parts[0]
+			}
 		}
-	}
 
-	// Get intro URL and voice ID
-	introURL, voiceID := h.audioManager.GetRandomIntroURL(baseURL)
-	session.VoiceID = voiceID // Store for other tracks
+		var mostRecentSession *StreamingSession
+		var mostRecentTime time.Time
 
-	// Log the streaming request
-	locationInfo := "no location"
-	if session.Location != nil {
-		locationInfo = fmt.Sprintf("%s, %s", session.Location.City, session.Location.Country)
-	}
-	log.Printf("[STREAMING] Intro requested - Session: %s, Bird: %s, Location: %s",
-		session.SessionID, session.BirdName, locationInfo)
+		for _, existingSession := range sessionStore {
+			if existingSession.BirdName != "" &&
+				strings.HasPrefix(existingSession.SessionID, cardID+"_") &&
+				existingSession.CreatedAt.After(mostRecentTime) {
+				mostRecentSession = existingSession
+				mostRecentTime = existingSession.CreatedAt
+			}
+		}
 
-	// Store session for subsequent tracks
-	sessionStore[session.SessionID] = session
-
-	// Add session ID to response header so Yoto can pass it to next tracks
-	c.Header("X-Session-ID", session.SessionID)
-
-	// Extract the intro file path from the URL to normalize it
-	// The URL format is: baseURL/audio/intros/filename
-	if strings.Contains(introURL, "/audio/intros/") {
-		parts := strings.Split(introURL, "/audio/intros/")
-		if len(parts) > 1 {
-			introFile := parts[1]
-			introPath := fmt.Sprintf("assets/final_intros/%s", introFile)
-
-			// Check if the file exists
-			if _, err := os.Stat(introPath); err == nil {
-				// Normalize and serve the intro
-				h.normalizeAndServeAudio(c, introPath, "intro")
+		if mostRecentSession != nil {
+			log.Printf("[STREAMING] Found recent session with bird: %s (age: %v)", mostRecentSession.BirdName, time.Since(mostRecentSession.CreatedAt))
+			session.BirdName = mostRecentSession.BirdName
+			session.ScientificName = mostRecentSession.ScientificName
+		} else {
+			localDate := time.Now().Format("2006-01-02")
+			globalBird, _, _ := h.updateCache.GetDailyGlobalBirdWithAudio(localDate)
+			if globalBird != "" {
+				log.Printf("[STREAMING] Using global bird from cache: %s", globalBird)
+				session.BirdName = globalBird
+			} else {
+				log.Printf("[STREAMING] ERROR: No bird assigned and no recent session found. Please wait for next scheduled update.")
+				c.JSON(http.StatusServiceUnavailable, gin.H{
+					"error": "Bird content not ready yet. Please try again in a few minutes.",
+				})
 				return
 			}
 		}
 	}
 
-	// Fallback: If it's a local file, serve it directly
-	if strings.Contains(introURL, c.Request.Host) {
-		// Extract the path and redirect to it
-		parts := strings.Split(introURL, c.Request.Host)
-		if len(parts) > 1 {
-			c.Redirect(http.StatusFound, parts[1])
-			return
-		}
-	}
+	birdDir := strings.ToLower(strings.ReplaceAll(session.BirdName, " ", "_"))
+	gcsURL := fmt.Sprintf("https://storage.googleapis.com/bird-song-explorer-audio/birds/%s/narration/intro.mp3", birdDir)
 
-	// Otherwise redirect to the intro URL
-	c.Redirect(http.StatusFound, introURL)
+	sessionStore[session.SessionID] = session
+	c.Header("X-Session-ID", session.SessionID)
+	c.Redirect(http.StatusFound, gcsURL)
 }
 
-// StreamBirdAnnouncement handles streaming requests for track 2 (bird announcement)
 func (h *Handler) StreamBirdAnnouncement(c *gin.Context) {
-	birdName := c.Query("bird")
-	if birdName == "" {
-		log.Printf("[STREAMING] No bird name provided for announcement")
-		c.Status(http.StatusBadRequest)
-		return
-	}
-
-	// Try to find the prerecorded bird announcement file
-	// The bird should have been selected from available prerecorded birds
-	prerecordedPath := h.findPrerecordedBirdFile(birdName, "bird-announcement.mp3")
-
-	if prerecordedPath != "" {
-		log.Printf("[STREAMING] Using prerecorded announcement for %s: %s", birdName, prerecordedPath)
-
-		// Construct the full file path
-		fullPath := fmt.Sprintf("prerecorded_tts/audio/%s", prerecordedPath)
-
-		// Check if the file exists
-		if _, err := os.Stat(fullPath); err == nil {
-			// Normalize and serve the announcement
-			h.normalizeAndServeAudio(c, fullPath, "announcement")
-			return
-		}
-
-		// Fallback to redirect if we can't process the file
-		baseURL := h.config.BaseURL
-		if baseURL == "" {
-			baseURL = fmt.Sprintf("https://%s", c.Request.Host)
-			if h.config.Environment == "development" {
-				baseURL = fmt.Sprintf("http://%s", c.Request.Host)
-			}
-		}
-
-		// Redirect to the static file URL
-		redirectURL := fmt.Sprintf("%s/audio/prerecorded/%s", baseURL, prerecordedPath)
-		log.Printf("[STREAMING] Redirecting to prerecorded announcement: %s", redirectURL)
-		c.Redirect(http.StatusFound, redirectURL)
-		return
-	}
-
-	// Fallback: If no prerecorded file found, log error and return not found
-	log.Printf("[STREAMING] ERROR: No prerecorded announcement found for bird: %s", birdName)
-	c.Status(http.StatusNotFound)
-}
-
-// StreamBirdSong handles streaming requests for track 3 (bird song)
-func (h *Handler) StreamBirdSong(c *gin.Context) {
-	birdName := c.Query("bird")
-	if birdName == "" {
-		log.Printf("[STREAMING] No bird name provided for bird song")
-		c.Status(http.StatusBadRequest)
-		return
-	}
-
 	sessionID := c.Query("session")
+	session := h.getOrCreateSession(c, sessionID)
 
-	log.Printf("[STREAMING] Bird song requested - Bird: %s, Session: %s (fetching fresh from Xeno-Canto)", birdName, sessionID)
-
-	// Always fetch fresh bird song from Xeno-Canto (no caching)
-	bird, err := h.birdSelector.GetBirdByName(birdName)
-	if err == nil && bird != nil && bird.AudioURL != "" {
-		log.Printf("[STREAMING] Found audio for %s: %s", birdName, bird.AudioURL)
-		h.proxyAudioContent(c, bird.AudioURL)
-		return
-	}
-
-	// If we don't have the audio URL, we can't fetch it with just the common name
-	// This should rarely happen as the webhook should have set the audio URL
-	log.Printf("[STREAMING] No audio URL available for %s", birdName)
-
-	// Try a fallback approach - use pre-known URL for common birds
-	if fallbackURL := getFallbackBirdAudioURL(birdName); fallbackURL != "" {
-		log.Printf("[STREAMING] Using fallback audio for %s", birdName)
-		h.proxyAudioContent(c, fallbackURL)
-		return
-	}
-
-	log.Printf("[STREAMING] No audio found for %s", birdName)
-	c.Status(http.StatusNotFound)
-}
-
-// StreamDescription handles streaming requests for track 4 (bird guide)
-func (h *Handler) StreamDescription(c *gin.Context) {
-	// Get bird name from query parameter
-	birdName := c.Query("bird")
+	birdName := session.BirdName
 	if birdName == "" {
-		log.Printf("[STREAMING] No bird name provided for description")
 		c.Status(http.StatusBadRequest)
 		return
 	}
 
-	// Try to find the prerecorded bird guide file
-	prerecordedPath := h.findPrerecordedBirdFile(birdName, "bird-guide.mp3")
+	birdDir := strings.ToLower(strings.ReplaceAll(birdName, " ", "_"))
+	gcsURL := fmt.Sprintf("https://storage.googleapis.com/bird-song-explorer-audio/birds/%s/narration/announcement.mp3", birdDir)
 
-	if prerecordedPath != "" {
-		log.Printf("[STREAMING] Using prerecorded guide for %s: %s", birdName, prerecordedPath)
+	c.Redirect(http.StatusFound, gcsURL)
+}
 
-		// Construct the full file path
-		fullPath := fmt.Sprintf("prerecorded_tts/audio/%s", prerecordedPath)
+func (h *Handler) StreamDescription(c *gin.Context) {
+	sessionID := c.Query("session")
+	session := h.getOrCreateSession(c, sessionID)
 
-		// Check if the file exists
-		if _, err := os.Stat(fullPath); err == nil {
-			// Normalize and serve the guide
-			h.normalizeAndServeAudio(c, fullPath, "guide")
-			return
-		}
-
-		// Fallback to redirect if we can't process the file
-		baseURL := h.config.BaseURL
-		if baseURL == "" {
-			baseURL = fmt.Sprintf("https://%s", c.Request.Host)
-			if h.config.Environment == "development" {
-				baseURL = fmt.Sprintf("http://%s", c.Request.Host)
-			}
-		}
-
-		// Redirect to the static file URL
-		redirectURL := fmt.Sprintf("%s/audio/prerecorded/%s", baseURL, prerecordedPath)
-		log.Printf("[STREAMING] Redirecting to prerecorded guide: %s", redirectURL)
-		c.Redirect(http.StatusFound, redirectURL)
+	birdName := session.BirdName
+	if birdName == "" {
+		c.Status(http.StatusBadRequest)
 		return
 	}
 
-	// Fallback: If no prerecorded file found, log error and return not found
-	log.Printf("[STREAMING] ERROR: No prerecorded guide found for bird: %s", birdName)
-	c.Status(http.StatusNotFound)
+	birdDir := strings.ToLower(strings.ReplaceAll(birdName, " ", "_"))
+	gcsURL := fmt.Sprintf("https://storage.googleapis.com/bird-song-explorer-audio/birds/%s/narration/description.mp3", birdDir)
+
+	c.Redirect(http.StatusFound, gcsURL)
 }
 
 // normalizeAndServeAudio normalizes an audio file to -16 LUFS and serves it
@@ -387,8 +241,24 @@ func (h *Handler) normalizeAndServeAudio(c *gin.Context, audioPath string, track
 	c.Data(http.StatusOK, "audio/mpeg", normalizedData)
 }
 
-// StreamOutro handles streaming requests for track 5 (outro)
 func (h *Handler) StreamOutro(c *gin.Context) {
+	sessionID := c.Query("session")
+	session := h.getOrCreateSession(c, sessionID)
+
+	birdName := session.BirdName
+	if birdName == "" {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+
+	birdDir := strings.ToLower(strings.ReplaceAll(birdName, " ", "_"))
+	gcsURL := fmt.Sprintf("https://storage.googleapis.com/bird-song-explorer-audio/birds/%s/narration/outro.mp3", birdDir)
+
+	c.Redirect(http.StatusFound, gcsURL)
+}
+
+// StreamOutro_OLD - Previous implementation with local files and ukulele mixing
+func (h *Handler) StreamOutro_OLD(c *gin.Context) {
 	birdName := c.Query("bird")
 	if birdName == "" {
 		log.Printf("[STREAMING] No bird name provided for outro")
@@ -563,116 +433,4 @@ func (h *Handler) findPrerecordedBirdFile(birdName string, fileName string) stri
 
 	log.Printf("[STREAMING] No prerecorded file found for %s/%s", birdDir, fileName)
 	return ""
-}
-
-// selectPrerecordedBird selects a bird from available prerecorded birds based on location
-func (h *Handler) selectPrerecordedBird(location *models.Location) (*models.Bird, error) {
-	// Map of available prerecorded birds with their regions
-	prerecordedBirds := map[string][]string{
-		"north_america": {
-			"American Robin",
-			"Northern Cardinal",
-			"Blue Jay",
-			"Mourning Dove",
-			"Black-capped Chickadee",
-			"House Sparrow",
-		},
-		"europe": {
-			"European Robin",
-			"Great Tit",
-			"Common Chaffinch",
-			"Eurasian Blue Tit",
-			"House Sparrow",
-		},
-		"asia": {
-			"House Sparrow",
-			"Great Tit",
-			"Oriental Magpie-robin",
-			"Japanese White-eye",
-		},
-		"australia": {
-			"Australian Magpie",
-			"Rainbow Lorikeet",
-			"Kookaburra",
-		},
-		"south_america": {
-			"Great Kiskadee",
-			"Rufous Hornero",
-		},
-		"central_america": {
-			"Great Kiskadee",
-		},
-	}
-
-	// Determine the best region based on location
-	var selectedRegion string
-	var availableBirds []string
-
-	if location != nil {
-		// Map location to region
-		if location.Country == "United States" || location.Country == "Canada" || location.Country == "Mexico" {
-			selectedRegion = "north_america"
-		} else if location.Country == "Australia" || location.Country == "New Zealand" {
-			selectedRegion = "australia"
-		} else if location.Country == "Brazil" || location.Country == "Argentina" || location.Country == "Chile" {
-			selectedRegion = "south_america"
-		} else if location.Region == "Europe" {
-			selectedRegion = "europe"
-		} else if location.Region == "Asia" {
-			selectedRegion = "asia"
-		} else {
-			// Default to North America for unknown locations
-			selectedRegion = "north_america"
-		}
-	} else {
-		// Default region if no location
-		selectedRegion = "north_america"
-	}
-
-	availableBirds = prerecordedBirds[selectedRegion]
-
-	// Select a random bird from the region (new bird per card insertion)
-	rand.Seed(time.Now().UnixNano())
-	birdIndex := rand.Intn(len(availableBirds))
-	selectedBird := availableBirds[birdIndex]
-
-	// Get the bird's scientific name
-	scientificNames := map[string]string{
-		"American Robin":         "Turdus migratorius",
-		"Northern Cardinal":      "Cardinalis cardinalis",
-		"Blue Jay":               "Cyanocitta cristata",
-		"Mourning Dove":          "Zenaida macroura",
-		"Black-capped Chickadee": "Poecile atricapillus",
-		"European Robin":         "Erithacus rubecula",
-		"Great Tit":              "Parus major",
-		"Common Chaffinch":       "Fringilla coelebs",
-		"Eurasian Blue Tit":      "Cyanistes caeruleus",
-		"House Sparrow":          "Passer domesticus",
-		"Oriental Magpie-robin":  "Copsychus saularis",
-		"Japanese White-eye":     "Zosterops japonicus",
-		"Australian Magpie":      "Gymnorhina tibicen",
-		"Rainbow Lorikeet":       "Trichoglossus moluccanus",
-		"Kookaburra":             "Dacelo novaeguineae",
-		"Great Kiskadee":         "Pitangus sulphuratus",
-		"Rufous Hornero":         "Furnarius rufus",
-	}
-
-	scientificName := scientificNames[selectedBird]
-
-	// Try to get the bird's audio URL from xeno-canto
-	audioURL := ""
-	if h.birdSelector != nil {
-		if bird, err := h.birdSelector.GetBirdByName(selectedBird); err == nil && bird != nil {
-			audioURL = bird.AudioURL
-		}
-	}
-
-	log.Printf("[STREAMING] Randomly selected bird: %s (index %d of %d) from region %s", selectedBird, birdIndex, len(availableBirds), selectedRegion)
-
-	return &models.Bird{
-		CommonName:     selectedBird,
-		ScientificName: scientificName,
-		Region:         selectedRegion,
-		AudioURL:       audioURL,
-	}, nil
 }

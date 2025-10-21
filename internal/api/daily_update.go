@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/callen/bird-song-explorer/internal/models"
@@ -106,22 +105,10 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 
 	var bird *models.Bird
 
-	// Check if we should use streaming mode and select from prerecorded birds only
 	useStreaming := os.Getenv("USE_STREAMING")
 	if useStreaming == "true" {
-		log.Printf("DailyUpdateHandler: Streaming mode enabled, selecting from prerecorded birds only")
-		// For streaming mode, select from available prerecorded birds
-		bird, err = h.selectPrerecordedBirdForDailyUpdate(location)
-		if err != nil {
-			log.Printf("DailyUpdateHandler: Failed to select prerecorded bird, using fallback: %v", err)
-			bird = &models.Bird{
-				CommonName:     "American Robin",
-				ScientificName: "Turdus migratorius",
-				Region:         "north_america",
-			}
-		}
+		bird = h.availableBirds.GetCyclingBird()
 	} else {
-		// Legacy mode - get bird from eBird API
 		bird, err = h.birdSelector.SelectBirdOfDay(location)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get bird: %v", err)})
@@ -139,51 +126,31 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 	// Use the configured service URL or fall back to host
 	baseURL := os.Getenv("SERVICE_URL")
 	if baseURL == "" {
-		// Fall back to using request host
 		baseURL = fmt.Sprintf("https://%s", c.Request.Host)
 		if h.config.Environment == "development" {
 			baseURL = fmt.Sprintf("http://%s", c.Request.Host)
 		}
 	}
-	log.Printf("DailyUpdateHandler: Using base URL: %s", baseURL)
-
-	// Get both the intro URL and the voice ID to ensure consistency across all tracks
-	introURL, voiceID := h.audioManager.GetRandomIntroURL(baseURL)
-	log.Printf("DailyUpdateHandler: Got intro URL and voice ID")
 
 	contentManager := h.yotoClient.NewContentManager()
-	log.Printf("DailyUpdateHandler: Created content manager")
 
-	// Create and link the bird content to your MYO card
-	cardID := h.config.YotoCardID // Add this to config - your MYO card ID (e.g., "ipHAS")
+	cardID := h.config.YotoCardID
 	if cardID == "" {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "YOTO_CARD_ID not configured"})
 		return
 	}
 
-	log.Printf("DailyUpdateHandler: About to update card %s with bird %s (using streaming for dynamic content)",
-		cardID, bird.CommonName)
-
-	// useStreaming was already declared above, reuse it
 	if useStreaming == "true" {
-		// Use streaming URLs for dynamic content
-		log.Printf("DailyUpdateHandler: Using streaming URLs for dynamic location-aware content")
-		err = contentManager.UpdateCardWithStreamingTracks(cardID, bird.CommonName, baseURL, "")
+		// Create session BEFORE updating card to ensure icon and bird name match
+		sessionID := h.CreateSessionForBird(cardID, bird.CommonName)
+		log.Printf("[DAILY_UPDATE] Created session %s for bird: %s", sessionID, bird.CommonName)
+
+		err = contentManager.UpdateCardWithStreamingTracks(cardID, bird.CommonName, baseURL, sessionID)
 	} else {
-		// Use the old approach with pre-uploaded content
-		log.Printf("DailyUpdateHandler: Using pre-uploaded content (legacy mode)")
-		err = contentManager.UpdateExistingCardContentWithDescriptionVoiceAndLocation(
-			cardID,
-			bird.CommonName,
-			introURL,
-			bird.AudioURL,
-			bird.Description,
-			voiceID,
-			0, // No latitude - triggers generic facts
-			0, // No longitude - triggers generic facts
-		)
+		log.Printf("[DAILY_UPDATE] ERROR: Streaming mode required but USE_STREAMING not set to true")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Streaming mode required"})
+		return
 	}
-	log.Printf("DailyUpdateHandler: Update completed (or failed)")
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -199,127 +166,4 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		"bird":      bird.CommonName,
 		"timestamp": time.Now().Format(time.RFC3339),
 	})
-}
-
-// selectPrerecordedBirdForDailyUpdate selects a bird from available prerecorded birds based on location
-func (h *Handler) selectPrerecordedBirdForDailyUpdate(location *models.Location) (*models.Bird, error) {
-	// Map of available prerecorded birds with their regions
-	prerecordedBirds := map[string][]string{
-		"north_america": {
-			"American Robin",
-			"Northern Cardinal",
-			"Blue Jay",
-			"Mourning Dove",
-			"Black-capped Chickadee",
-		},
-		"europe": {
-			"European Robin",
-			"Great Tit",
-			"Common Chaffinch",
-			"Eurasian Blue Tit",
-		},
-		"asia": {
-			"House Sparrow",
-			"Great Tit",
-			"Oriental Magpie-robin",
-			"Japanese White-eye",
-		},
-		"australia": {
-			"Australian Magpie",
-			"Rainbow Lorikeet",
-			"Kookaburra",
-		},
-		"south_america": {
-			"Rufous Hornero",
-		},
-		"central_america": {
-			"Great Kiskadee",
-		},
-	}
-
-	// Determine the best region based on location
-	var selectedRegion string
-	var availableBirds []string
-
-	if location != nil {
-		// Map location region to our prerecorded bird regions
-		regionName := strings.ToLower(location.Region)
-		if strings.Contains(regionName, "new york") || strings.Contains(regionName, "los angeles") ||
-			strings.Contains(regionName, "chicago") || strings.Contains(regionName, "houston") ||
-			strings.Contains(regionName, "phoenix") || strings.Contains(regionName, "denver") ||
-			strings.Contains(regionName, "seattle") || strings.Contains(regionName, "miami") ||
-			strings.Contains(regionName, "boston") || strings.Contains(regionName, "san francisco") ||
-			strings.Contains(regionName, "toronto") || strings.Contains(regionName, "montreal") ||
-			strings.Contains(regionName, "vancouver") || strings.Contains(regionName, "calgary") ||
-			strings.Contains(regionName, "edmonton") || strings.Contains(regionName, "ottawa") {
-			selectedRegion = "north_america"
-		} else if strings.Contains(regionName, "london") || strings.Contains(regionName, "manchester") ||
-			strings.Contains(regionName, "edinburgh") || strings.Contains(regionName, "birmingham") ||
-			strings.Contains(regionName, "bristol") || strings.Contains(regionName, "leeds") ||
-			strings.Contains(regionName, "paris") || strings.Contains(regionName, "berlin") ||
-			strings.Contains(regionName, "moscow") {
-			selectedRegion = "europe"
-		} else if strings.Contains(regionName, "sydney") {
-			selectedRegion = "australia"
-		} else if strings.Contains(regionName, "tokyo") || strings.Contains(regionName, "mumbai") ||
-			strings.Contains(regionName, "singapore") {
-			selectedRegion = "asia"
-		} else if strings.Contains(regionName, "são paulo") || strings.Contains(regionName, "buenos aires") {
-			selectedRegion = "south_america"
-		} else if strings.Contains(regionName, "mexico") || strings.Contains(regionName, "cancun") ||
-			strings.Contains(regionName, "tijuana") || strings.Contains(regionName, "ciudad juárez") ||
-			strings.Contains(regionName, "guadalajara") || strings.Contains(regionName, "monterrey") {
-			selectedRegion = "central_america"
-		} else {
-			// Default to North America for unknown locations
-			selectedRegion = "north_america"
-		}
-	} else {
-		// Default region if no location
-		selectedRegion = "north_america"
-	}
-
-	availableBirds = prerecordedBirds[selectedRegion]
-	if len(availableBirds) == 0 {
-		return nil, fmt.Errorf("no prerecorded birds available for region: %s", selectedRegion)
-	}
-
-	// Select a bird deterministically based on date
-	now := time.Now()
-	daySeed := now.Year()*365 + now.YearDay()
-	birdIndex := daySeed % len(availableBirds)
-	selectedBird := availableBirds[birdIndex]
-
-	// Get the bird's scientific name
-	scientificNames := map[string]string{
-		"American Robin":         "Turdus migratorius",
-		"Northern Cardinal":      "Cardinalis cardinalis",
-		"Blue Jay":               "Cyanocitta cristata",
-		"Mourning Dove":          "Zenaida macroura",
-		"Black-capped Chickadee": "Poecile atricapillus",
-		"European Robin":         "Erithacus rubecula",
-		"Great Tit":              "Parus major",
-		"Common Chaffinch":       "Fringilla coelebs",
-		"Eurasian Blue Tit":      "Cyanistes caeruleus",
-		"House Sparrow":          "Passer domesticus",
-		"Oriental Magpie-robin":  "Copsychus saularis",
-		"Japanese White-eye":     "Zosterops japonicus",
-		"Australian Magpie":      "Gymnorhina tibicen",
-		"Rainbow Lorikeet":       "Trichoglossus moluccanus",
-		"Kookaburra":             "Dacelo novaeguineae",
-		"Rufous Hornero":         "Furnarius rufus",
-		"Great Kiskadee":         "Pitangus sulphuratus",
-	}
-
-	scientificName := scientificNames[selectedBird]
-	if scientificName == "" {
-		scientificName = "Unknown"
-	}
-
-	return &models.Bird{
-		CommonName:     selectedBird,
-		ScientificName: scientificName,
-		Region:         selectedRegion,
-		AudioURL:       "", // Will be fetched from xeno-canto when needed
-	}, nil
 }

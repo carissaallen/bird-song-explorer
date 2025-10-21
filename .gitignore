@@ -57,3 +57,8 @@ Thumbs.db
 /elevenlabs_intros/
 /audio_cache/
 /unused_intros/
+/deprecated/
+
+# Audacity project files
+**/audacity/
+*.aup3

@@ -1,0 +1,43 @@
+{
+  "common_name": "Laughing Kookaburra",
+  "scientific_name": "Dacelo novaeguineae",
+  "family": "Alcedinidae",
+  "regions": [
+    "australia/eastern",
+    "australia/southern"
+  ],
+  "primary_habitat": "eucalyptus_forests",
+  "habitats": [
+    "eucalyptus forests",
+    "woodlands",
+    "parks",
+    "gardens",
+    "forest edges"
+  ],
+  "conservation_status": "Least Concern",
+  "size": {
+    "length_cm": "40-45",
+    "wingspan_cm": "56-66",
+    "weight_g": "300-450"
+  },
+  "diet": [
+    "snakes",
+    "lizards",
+    "small mammals",
+    "insects",
+    "worms"
+  ],
+  "breeding_season": "September-January",
+  "migration_pattern": "resident",
+  "distinctive_features": [
+    "large head with prominent bill",
+    "brown and white plumage",
+    "dark eye stripe",
+    "distinctive laughing call"
+  ],
+  "fun_facts": [
+    "Cornell Cool Facts not available for this species - Laughing Kookaburra is native to Australia",
+    "Largest member of the kingfisher family",
+    "Their famous laughing call is used to establish territory"
+  ]
+}

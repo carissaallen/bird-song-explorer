@@ -23,10 +23,8 @@ type Handler struct {
 	timezoneLookup          *services.TimezoneLookupService
 	birdSelector            *services.BirdSelector
 	yotoClient              *yoto.Client
-	audioManager            *services.AudioManager
-	narrationManager        *services.NarrationManager
-	introGenerator          *services.DynamicIntroGenerator
-	updateCache            *services.UpdateCache
+	updateCache             *services.UpdateCache
+	availableBirds          *services.AvailableBirdsService
 }
 
 func NewHandler(cfg *config.Config) *Handler {
@@ -56,10 +54,8 @@ func NewHandler(cfg *config.Config) *Handler {
 		timezoneLookup:          timezoneLookup,
 		birdSelector:            services.NewBirdSelector(cfg.EBirdAPIKey, cfg.XenoCantoAPIKey),
 		yotoClient:              yotoClient,
-		audioManager:            services.NewAudioManager(),
-		narrationManager:        services.NewNarrationManager(cfg.ElevenLabsAPIKey),
-		introGenerator:          services.NewDynamicIntroGenerator(cfg.ElevenLabsAPIKey),
-		updateCache:            services.NewUpdateCache(),
+		updateCache:             services.NewUpdateCache(),
+		availableBirds:          services.NewAvailableBirdsService(),
 	}
 }
 
@@ -201,26 +197,29 @@ func (h *Handler) GetBirdOfDay(c *gin.Context) {
 // 	})
 // }
 
-func (h *Handler) GetRandomIntro(c *gin.Context) {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	baseURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+// GetRandomIntro - Temporarily disabled while migrating to human voices
+// func (h *Handler) GetRandomIntro(c *gin.Context) {
+// 	scheme := "http"
+// 	if c.Request.TLS != nil {
+// 		scheme = "https"
+// 	}
+// 	baseURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
 
-	introURL, voiceID := h.audioManager.GetRandomIntroURL(baseURL)
+// 	introURL, voiceID := h.audioManager.GetRandomIntroURL(baseURL)
 
-	c.JSON(http.StatusOK, gin.H{
-		"intro_url": introURL,
-		"voice_id":  voiceID,
-		"message":   "Random intro selected",
-	})
-}
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"intro_url": introURL,
+// 		"voice_id":  voiceID,
+// 		"message":   "Random intro selected",
+// 	})
+// }
 
 func (h *Handler) createTracksFromBird(bird *models.Bird) []yoto.Track {
 	baseURL := "https://yoto-bird-song-explorer-362662614716.us-central1.run.app"
 
-	voice := h.narrationManager.GetSelectedVoiceName()
+	// Temporarily hardcode voice while migrating to human voices
+	// voice := h.narrationManager.GetSelectedVoiceName()
+	voice := "default"
 
 	introFile := h.getIntroFileForVoice(voice)
 

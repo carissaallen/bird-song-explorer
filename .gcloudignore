@@ -32,10 +32,15 @@ audio_samples/
 voice_tests/
 elevenlabs_intros/
 varied_intros/
+deprecated/
+audacity/
 
-# Keep final audio files
-!final_intros/
-!final_outros/
+# Exclude all birds directory except icons
+birds/
+!birds/_global_species/
+!birds/_global_species/*/
+!birds/_global_species/*/icons/
+!birds/_global_species/*/icons/*.png
 
 # Documentation
 *.md
