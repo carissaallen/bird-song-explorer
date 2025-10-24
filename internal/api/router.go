@@ -26,7 +26,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	v1 := router.Group("/api/v1")
 	{
 		v1.GET("/bird-of-day", handler.GetBirdOfDay)
-		v1.POST("/yoto/webhook", handler.HandleYotoWebhookStreaming) // Streaming: Returns playlist when USE_STREAMING=true
+		v1.POST("/yoto/webhook", handler.HandleYotoWebhookStreaming) // Streaming: Returns playlist with prerecorded bird audio
 		// v1.POST("/webhook", handler.HandleYotoWebhookUnified)  // DEPRECATED: Use /api/v1/yoto/webhook
 		v1.GET("/test-webhook", handler.TestWebhookHandler) // Test webhook simulation
 		// v1.GET("/audio/intro", handler.GetRandomIntro) // Temporarily disabled - migrating to human voices

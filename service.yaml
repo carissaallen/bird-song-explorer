@@ -19,11 +19,6 @@ spec:
               secretKeyRef:
                 name: xenocanto-api-key
                 key: latest
-          - name: ELEVENLABS_API_KEY
-            valueFrom:
-              secretKeyRef:
-                name: elevenlabs-api-key
-                key: latest
           - name: YOTO_ACCESS_TOKEN
             valueFrom:
               secretKeyRef:

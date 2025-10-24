@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/callen/bird-song-explorer/internal/models"
 	"github.com/gin-gonic/gin"
 )
 
@@ -38,83 +37,8 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		log.Printf("DailyUpdateHandler: Successfully reached httpbin.org")
 	}
 
-	// Get a random bird from diverse locations with focus on US, UK, Mexico, Canada
-	randomLocations := []struct {
-		lat, lng float64
-		name     string
-	}{
-		// United States (expanded coverage)
-		{40.7128, -74.0060, "New York"},
-		{34.0522, -118.2437, "Los Angeles"},
-		{41.8781, -87.6298, "Chicago"},
-		{29.7604, -95.3698, "Houston"},
-		{33.4484, -112.0740, "Phoenix"},
-		{39.7392, -104.9903, "Denver"},
-		{47.6062, -122.3321, "Seattle"},
-		{25.7617, -80.1918, "Miami"},
-		{42.3601, -71.0589, "Boston"},
-		{37.7749, -122.4194, "San Francisco"},
-
-		// Canada (expanded coverage)
-		{43.6532, -79.3832, "Toronto"},
-		{45.5017, -73.5673, "Montreal"},
-		{49.2827, -123.1207, "Vancouver"},
-		{51.0447, -114.0719, "Calgary"},
-		{53.5461, -113.4938, "Edmonton"},
-		{45.4215, -75.6972, "Ottawa"},
-
-		// United Kingdom (expanded coverage)
-		{51.5074, -0.1278, "London"},
-		{53.4808, -2.2426, "Manchester"},
-		{55.9533, -3.1883, "Edinburgh"},
-		{52.4862, -1.8904, "Birmingham"},
-		{51.4545, -2.5879, "Bristol"},
-		{53.8008, -1.5491, "Leeds"},
-
-		// Mexico (expanded coverage)
-		{19.4326, -99.1332, "Mexico City"},
-		{20.6597, -103.3496, "Guadalajara"},
-		{25.6866, -100.3161, "Monterrey"},
-		{21.1619, -86.8515, "Cancun"},
-		{32.5149, -117.0382, "Tijuana"},
-		{31.6904, -106.4245, "Ciudad Juárez"},
-
-		// Other diverse locations
-		{-33.8688, 151.2093, "Sydney"},
-		{35.6762, 139.6503, "Tokyo"},
-		{-1.2921, 36.8219, "Nairobi"},
-		{-23.5505, -46.6333, "São Paulo"},
-		{48.8566, 2.3522, "Paris"},
-		{52.5200, 13.4050, "Berlin"},
-		{55.7558, 37.6173, "Moscow"},
-		{19.0760, 72.8777, "Mumbai"},
-		{1.3521, 103.8198, "Singapore"},
-		{-34.6037, -58.3816, "Buenos Aires"},
-	}
-
-	// Pick a random location for bird selection (changes daily)
-	now := time.Now()
-	dayIndex := (now.Year()*365 + now.YearDay()) % len(randomLocations)
-	selectedLoc := randomLocations[dayIndex]
-
-	location := &models.Location{
-		Latitude:  selectedLoc.lat,
-		Longitude: selectedLoc.lng,
-		Region:    selectedLoc.name,
-	}
-
-	var bird *models.Bird
-
-	useStreaming := os.Getenv("USE_STREAMING")
-	if useStreaming == "true" {
-		bird = h.availableBirds.GetCyclingBird()
-	} else {
-		bird, err = h.birdSelector.SelectBirdOfDay(location)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to get bird: %v", err)})
-			return
-		}
-	}
+	// Always select bird from available prerecorded birds (streaming mode only)
+	bird := h.availableBirds.GetCyclingBird()
 	log.Printf("DailyUpdateHandler: Selected bird: %s", bird.CommonName)
 
 	// Store this as the daily global bird for fallback use
@@ -140,17 +64,11 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 		return
 	}
 
-	if useStreaming == "true" {
-		// Create session BEFORE updating card to ensure icon and bird name match
-		sessionID := h.CreateSessionForBird(cardID, bird.CommonName)
-		log.Printf("[DAILY_UPDATE] Created session %s for bird: %s", sessionID, bird.CommonName)
+	// Create session BEFORE updating card to ensure icon and bird name match
+	sessionID := h.CreateSessionForBird(cardID, bird.CommonName)
+	log.Printf("[DAILY_UPDATE] Created session %s for bird: %s", sessionID, bird.CommonName)
 
-		err = contentManager.UpdateCardWithStreamingTracks(cardID, bird.CommonName, baseURL, sessionID)
-	} else {
-		log.Printf("[DAILY_UPDATE] ERROR: Streaming mode required but USE_STREAMING not set to true")
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Streaming mode required"})
-		return
-	}
+	err = contentManager.UpdateCardWithStreamingTracks(cardID, bird.CommonName, baseURL, sessionID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

@@ -30,18 +30,19 @@ vendor/
 scripts/
 audio_samples/
 voice_tests/
-elevenlabs_intros/
 varied_intros/
 deprecated/
 audacity/
 
-# Exclude all birds directory except icons
-birds/
+# Include birds directory for prerecorded audio and icons
+!birds/
+!birds/_global_narration/
 !birds/_global_species/
-!birds/_global_species/*/
-!birds/_global_species/*/icons/
-!birds/_global_species/*/icons/*.png
 
 # Documentation
 *.md
 LICENSE
+# Audacity project files
+*.aup3
+*.aup3-shm
+*.aup3-wal

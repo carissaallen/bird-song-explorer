@@ -37,6 +37,7 @@ test_auth_env.txt
 # Logs
 *.log
 logs/
+docs/
 
 # Build output
 /bird-song-explorer
@@ -54,7 +55,6 @@ Thumbs.db
 *.wav
 # Exclude other audio directories but keep final_intros
 /varied_intros/
-/elevenlabs_intros/
 /audio_cache/
 /unused_intros/
 /deprecated/

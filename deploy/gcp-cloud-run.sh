@@ -35,13 +35,13 @@ gcloud run deploy $SERVICE_NAME \
   --set-env-vars="ENV=production,\
 BASE_URL=https://bird-song-explorer-362662614716.us-central1.run.app,\
 YOTO_API_BASE_URL=https://api.yotoplay.com,\
-USE_STREAMING=true,\
 BIRD_FACT_GENERATOR=enhanced,\
-YOTO_CARD_ID=ipHAS" \
+YOTO_CARD_ID=ipHAS,\
+AUTO_UPDATE_SECRETS=true,\
+GCP_PROJECT=yoto-bird-song-explorer" \
   --set-secrets="EBIRD_API_KEY=ebird-api-key:latest,\
 YOTO_ACCESS_TOKEN=yoto-access-token:latest,\
 YOTO_REFRESH_TOKEN=yoto-refresh-token:latest,\
-ELEVENLABS_API_KEY=elevenlabs-api-key:latest,\
 XENOCANTO_API_KEY=xenocanto-api-key:latest,\
 YOTO_CLIENT_ID=yoto-client-id:latest"
 
