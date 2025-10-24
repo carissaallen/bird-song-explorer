@@ -100,14 +100,16 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 
 		// Try bird-specific icon first
 		if _, err := os.Stat(birdSpecificIconPath); err == nil {
-			fmt.Printf("[STREAMING_UPDATE] Uploading bird-specific icon: %s\n", birdSpecificIconPath)
+			fmt.Printf("[STREAMING_UPDATE] ✅ Uploading bird icon for '%s': %s\n", birdName, birdSpecificIconPath)
 			birdIcon = cm.uploadBirdIconNoCache(birdSpecificIconPath, birdDir)
+			fmt.Printf("[STREAMING_UPDATE] ✅ Bird icon uploaded - Bird: %s, Icon ID: %s\n", birdName, birdIcon)
 		} else {
 			// Fallback to generic bird icon
-			fmt.Printf("[STREAMING_UPDATE] Bird-specific icon not found at %s, using generic bird icon\n", birdSpecificIconPath)
+			fmt.Printf("[STREAMING_UPDATE] ⚠️  Bird-specific icon not found at %s for '%s', using generic bird icon\n", birdSpecificIconPath, birdName)
 			birdIcon = cm.uploadTrackIcon("./assets/icons/bird_16x16.png", "bird")
 		}
 	} else {
+		fmt.Printf("[STREAMING_UPDATE] ⚠️  No bird name provided, using generic bird icon\n")
 		birdIcon = cm.uploadTrackIcon("./assets/icons/bird_16x16.png", "bird")
 	}
 
@@ -247,6 +249,6 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 		return fmt.Errorf("failed to update card content (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	fmt.Printf("Successfully updated card %s with streaming tracks for %s\n", cardID, birdName)
+	fmt.Printf("[STREAMING_UPDATE] ✅ Card %s updated - Bird: '%s', Icon: %s, Session: %s\n", cardID, birdName, birdIcon, sessionID)
 	return nil
 }
