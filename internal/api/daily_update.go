@@ -39,12 +39,15 @@ func (h *Handler) DailyUpdateHandler(c *gin.Context) {
 
 	// Always select bird from available prerecorded birds (streaming mode only)
 	bird := h.availableBirds.GetCyclingBird()
-	log.Printf("DailyUpdateHandler: Selected bird: %s", bird.CommonName)
+	now := time.Now().UTC()
+	daysSinceEpoch := now.Unix() / (24 * 60 * 60)
+	log.Printf("DailyUpdateHandler: Selected bird: %s (UTC: %s, days since epoch: %d, index: %d)",
+		bird.CommonName, now.Format("2006-01-02 15:04:05"), daysSinceEpoch, daysSinceEpoch%4)
 
 	// Store this as the daily global bird for fallback use
-	localDate := time.Now().Format("2006-01-02")
-	h.updateCache.SetDailyGlobalBirdWithAudio(localDate, bird.CommonName, bird.AudioURL)
-	log.Printf("DailyUpdateHandler: Stored %s as global bird for %s with audio URL", bird.CommonName, localDate)
+	localDate := time.Now().UTC().Format("2006-01-02")
+	h.updateCache.SetDailyGlobalBird(localDate, bird.CommonName)
+	log.Printf("DailyUpdateHandler: Stored %s as global bird for %s", bird.CommonName, localDate)
 
 	// Get a generic intro (no bird name mentioned)
 	// Use the configured service URL or fall back to host
