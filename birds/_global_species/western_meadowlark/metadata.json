@@ -1,0 +1,40 @@
+{
+  "common_name": "Western Meadowlark",
+  "scientific_name": "Sturnella neglecta",
+  "family": "Icteridae",
+  "regions": [
+    "north_america/us",
+    "north_america/canada",
+    "north_america/mexico"
+  ],
+  "primary_habitat": "grasslands",
+  "habitats": [
+    "grasslands",
+    "prairies",
+    "agricultural fields",
+    "pastures"
+  ],
+  "conservation_status": "Least Concern",
+  "size": {
+    "length_cm": "20-25",
+    "wingspan_cm": "36-41",
+    "weight_g": "80-120"
+  },
+  "diet": [
+    "insects",
+    "seeds",
+    "berries"
+  ],
+  "breeding_season": "March-August",
+  "migration_pattern": "partial_migrant",
+  "distinctive_features": [
+    "bright yellow breast with black V-shaped band",
+    "melodious flute-like song",
+    "long pointed bill"
+  ],
+  "fun_facts": [
+    "The Western Meadowlark is the state bird of six states: Kansas, Montana, Nebraska, North Dakota, Oregon, and Wyoming. Only the Northern Cardinal is a more popular civic symbol, edging out the meadowlark by one state.",
+    "Like other members of the blackbird, or icterid, family, meadowlarks use a feeding behavior called \"gaping,\" which relies on the unusually strong muscles that open their bill. They insert their bill into the soil, bark or other substrate, then force it open to create a hole. This gives meadowlarks access to insects and other food items that most birds can't reach.",
+    "A male Western Meadowlark usually has two mates at the same time. The females do all the incubating and brooding, and most of the feeding of the young."
+  ]
+}

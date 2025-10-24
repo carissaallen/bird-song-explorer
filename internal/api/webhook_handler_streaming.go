@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/callen/bird-song-explorer/internal/models"
@@ -32,13 +31,7 @@ func (h *Handler) HandleYotoWebhookStreaming(c *gin.Context) {
 	}
 
 	// Check if streaming mode is enabled
-	useStreaming := os.Getenv("USE_STREAMING")
-	if useStreaming != "true" {
-		// Fall back to the traditional webhook handler
-		h.HandleYotoWebhookV4(c)
-		return
-	}
-
+	// Always use streaming mode with human voices from GCS
 	log.Printf("[WEBHOOK-STREAMING] Processing card.played event with streaming mode")
 
 	// Use configured card ID or webhook card ID
@@ -133,8 +126,8 @@ func (h *Handler) HandleYotoWebhookStreaming(c *gin.Context) {
 			baseURL = fmt.Sprintf("http://%s", c.Request.Host)
 		}
 	}
-	_, voiceID := h.audioManager.GetRandomIntroURL(baseURL)
-	session.VoiceID = voiceID
+	// Use a default voice since we're using human narration now
+	session.VoiceID = "default"
 
 	// Store session with the session ID as key
 	sessionStore[sessionID] = session

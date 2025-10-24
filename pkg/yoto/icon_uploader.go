@@ -46,6 +46,10 @@ func NewIconUploader(client *Client) *IconUploader {
 
 // UploadIcon uploads an icon file and returns the media ID
 func (iu *IconUploader) UploadIcon(filePath string, filename string) (string, error) {
+	// For animated GIFs, use the special uploader
+	if strings.HasSuffix(strings.ToLower(filePath), ".gif") {
+		return iu.UploadAnimatedGIF(filePath, filename)
+	}
 
 	// Check cache first
 	iu.cacheMu.RLock()
@@ -67,13 +71,11 @@ func (iu *IconUploader) UploadIcon(filePath string, filename string) (string, er
 
 	// Determine content type based on file extension
 	contentType := "image/png"
-	if strings.HasSuffix(strings.ToLower(filePath), ".gif") {
-		contentType = "image/gif"
-	} else if strings.HasSuffix(strings.ToLower(filePath), ".jpg") || strings.HasSuffix(strings.ToLower(filePath), ".jpeg") {
+	if strings.HasSuffix(strings.ToLower(filePath), ".jpg") || strings.HasSuffix(strings.ToLower(filePath), ".jpeg") {
 		contentType = "image/jpeg"
 	}
 
-	// Build URL with query parameters - use autoConvert=true like yoto-myo-magic
+	// Build URL with query parameters - use autoConvert=true for static images
 	url := fmt.Sprintf("%s/media/displayIcons/user/me/upload?autoConvert=true&filename=%s",
 		iu.client.baseURL, filename)
 
@@ -117,6 +119,73 @@ func (iu *IconUploader) UploadIcon(filePath string, filename string) (string, er
 	iu.iconCache[filePath] = uploadResp.DisplayIcon.MediaID
 	iu.cacheMu.Unlock()
 
+	return uploadResp.DisplayIcon.MediaID, nil
+}
+
+// UploadIconNoCache uploads an icon WITHOUT caching - useful for bird icons that change
+func (iu *IconUploader) UploadIconNoCache(filePath string, filename string) (string, error) {
+	// For animated GIFs, use the special uploader
+	if strings.HasSuffix(strings.ToLower(filePath), ".gif") {
+		return iu.UploadAnimatedGIF(filePath, filename)
+	}
+
+	if err := iu.client.ensureAuthenticated(); err != nil {
+		return "", fmt.Errorf("authentication failed: %w", err)
+	}
+
+	// Read the icon file
+	iconData, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read icon file: %w", err)
+	}
+
+	// Determine content type based on file extension
+	contentType := "image/png"
+	if strings.HasSuffix(strings.ToLower(filePath), ".jpg") || strings.HasSuffix(strings.ToLower(filePath), ".jpeg") {
+		contentType = "image/jpeg"
+	}
+
+	// Build URL with query parameters - use autoConvert=true for static images
+	url := fmt.Sprintf("%s/media/displayIcons/user/me/upload?autoConvert=true&filename=%s",
+		iu.client.baseURL, filename)
+
+	// Create request with raw image data (as shown in Yoto docs)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(iconData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+iu.client.accessToken)
+	req.Header.Set("Content-Type", contentType)
+
+	// Send request
+	resp, err := iu.client.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload icon: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("upload failed: %d - %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var uploadResp IconUploadResponse
+	if err := json.Unmarshal(body, &uploadResp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w - body: %s", err, string(body))
+	}
+
+	if uploadResp.DisplayIcon.MediaID == "" {
+		return "", fmt.Errorf("no media ID in response: %s", string(body))
+	}
+
+	// DO NOT cache - return the media ID directly
+	fmt.Printf("[ICON_UPLOADER] Uploaded icon (no cache) %s: %s\n", filename, uploadResp.DisplayIcon.MediaID)
 	return uploadResp.DisplayIcon.MediaID, nil
 }
 
@@ -281,4 +350,72 @@ func FormatIconID(mediaID string) string {
 		return mediaID
 	}
 	return fmt.Sprintf("yoto:#%s", mediaID)
+}
+
+// UploadAnimatedGIF uploads an animated GIF icon with autoConvert=false
+func (iu *IconUploader) UploadAnimatedGIF(filePath string, filename string) (string, error) {
+	// Check cache first
+	iu.cacheMu.RLock()
+	if cachedID, exists := iu.iconCache[filePath]; exists {
+		iu.cacheMu.RUnlock()
+		return cachedID, nil
+	}
+	iu.cacheMu.RUnlock()
+
+	if err := iu.client.ensureAuthenticated(); err != nil {
+		return "", fmt.Errorf("authentication failed: %w", err)
+	}
+
+	// Read the GIF file
+	gifData, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read GIF file: %w", err)
+	}
+
+	// Build URL with autoConvert=false for animated GIFs
+	url := fmt.Sprintf("%s/media/displayIcons/user/me/upload?autoConvert=false&filename=%s",
+		iu.client.baseURL, filename)
+
+	// Create request with GIF data
+	req, err := http.NewRequest("POST", url, bytes.NewReader(gifData))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Set headers
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", iu.client.accessToken))
+	req.Header.Set("Content-Type", "image/gif")
+
+	// Make request
+	resp, err := iu.client.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload animated GIF: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return "", fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var uploadResp struct {
+		MediaID string `json:"mediaId"`
+	}
+	if err := json.Unmarshal(body, &uploadResp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Cache the result
+	iu.cacheMu.Lock()
+	iu.iconCache[filePath] = uploadResp.MediaID
+	iu.cacheMu.Unlock()
+
+	fmt.Printf("[ICON_UPLOADER] Successfully uploaded animated GIF %s: %s\n", filename, uploadResp.MediaID)
+	return uploadResp.MediaID, nil
 }

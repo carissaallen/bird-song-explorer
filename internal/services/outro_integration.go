@@ -7,8 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
-
-	"github.com/callen/bird-song-explorer/internal/config"
 )
 
 // OutroIntegration handles the complete outro flow with pre-recorded files
@@ -16,7 +14,6 @@ type OutroIntegration struct {
 	staticManager *StaticOutroManager
 	audioMixer    *AudioMixer
 	useStatic     bool
-	voiceManager  *config.VoiceManager
 }
 
 // NewOutroIntegration creates a new outro integration service
@@ -28,7 +25,6 @@ func NewOutroIntegration() *OutroIntegration {
 		staticManager: NewStaticOutroManager(),
 		audioMixer:    NewAudioMixer(),
 		useStatic:     useStatic,
-		voiceManager:  config.NewVoiceManager(),
 	}
 }
 
@@ -139,11 +135,8 @@ func (oi *OutroIntegration) GetOutroURL(voiceName string, dayOfWeek time.Weekday
 
 // ValidateOutros checks that all required outro files exist
 func (oi *OutroIntegration) ValidateOutros() error {
-	// Get all configured voices
-	voices := []string{}
-	for _, voice := range oi.voiceManager.GetAvailableVoices() {
-		voices = append(voices, voice.Name)
-	}
+	// Hardcoded list of human voice narrators
+	voices := []string{"Amelia", "Antoni", "Charlotte", "Peter", "Drake", "Sally"}
 	types := []string{"joke", "wisdom", "teaser", "challenge", "funfact"}
 
 	missingCount := 0

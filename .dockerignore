@@ -1,0 +1,40 @@
+# Ignore deprecated files - not needed in production
+deprecated/
+
+# Development files
+.git/
+.gitignore
+*.md
+README.md
+docs/
+
+# Test files
+*_test.go
+test/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Deployment scripts (already in container)
+deploy/
+
+# Environment files
+.env
+.env.local
+
+# Audacity project files
+audacity/

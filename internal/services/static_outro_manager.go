@@ -4,23 +4,19 @@ import (
 	"fmt"
 	"path/filepath"
 	"time"
-
-	"github.com/callen/bird-song-explorer/internal/config"
 )
 
 // StaticOutroManager uses pre-recorded outro files instead of TTS
 type StaticOutroManager struct {
-	outroDir     string
-	useStatic    bool
-	voiceManager *config.VoiceManager
+	outroDir  string
+	useStatic bool
 }
 
 // NewStaticOutroManager creates a manager for pre-recorded outros
 func NewStaticOutroManager() *StaticOutroManager {
 	return &StaticOutroManager{
-		outroDir:     "assets/final_outros",
-		useStatic:    true, // Can be toggled via env var
-		voiceManager: config.NewVoiceManager(),
+		outroDir:  "assets/final_outros",
+		useStatic: true, // Can be toggled via env var
 	}
 }
 
@@ -93,11 +89,8 @@ func (som *StaticOutroManager) getOutroType(dayOfWeek time.Weekday) string {
 func (som *StaticOutroManager) CountAvailableOutros() map[string]int {
 	counts := make(map[string]int)
 	types := []string{"joke", "wisdom", "teaser", "challenge", "funfact"}
-	// Get all configured voices
-	voices := []string{}
-	for _, voice := range som.voiceManager.GetAvailableVoices() {
-		voices = append(voices, voice.Name)
-	}
+	// Hardcoded list of human voice narrators
+	voices := []string{"Amelia", "Antoni", "Charlotte", "Peter", "Drake", "Sally"}
 
 	for _, voice := range voices {
 		for _, outroType := range types {

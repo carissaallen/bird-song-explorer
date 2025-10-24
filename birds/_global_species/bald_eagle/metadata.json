@@ -1,0 +1,43 @@
+{
+  "common_name": "Bald Eagle",
+  "scientific_name": "Haliaeetus leucocephalus",
+  "family": "Accipitridae",
+  "regions": [
+    "north_america/us",
+    "north_america/canada",
+    "north_america/mexico"
+  ],
+  "primary_habitat": "lakes_and_rivers",
+  "habitats": [
+    "lakes",
+    "rivers",
+    "coastlines",
+    "reservoirs",
+    "marshes"
+  ],
+  "conservation_status": "Least Concern",
+  "size": {
+    "length_cm": "70-102",
+    "wingspan_cm": "180-230",
+    "weight_g": "3000-6300"
+  },
+  "diet": [
+    "fish",
+    "waterfowl",
+    "carrion",
+    "small mammals"
+  ],
+  "breeding_season": "February-August",
+  "migration_pattern": "partial_migrant",
+  "distinctive_features": [
+    "white head and tail feathers in adults",
+    "massive yellow beak",
+    "powerful talons",
+    "dark brown body"
+  ],
+  "fun_facts": [
+    "Rather than do their own fishing, Bald Eagles often go after other creatures' catches. A Bald Eagle will harass a hunting Osprey until the smaller raptor drops its prey in midair, where the eagle swoops it up. A Bald Eagle may even snatch a fish directly out of an Osprey's talons. Fishing mammals (even people sometimes) can also lose prey to Bald Eagle piracy.",
+    "The largest Bald Eagle nest on record, in St. Petersburg, Florida, was 2.9 meters in diameter and 6.1 meters tall. Another famous nest—in Vermilion, Ohio—was shaped like a wine glass and weighed almost two metric tons. It was used for 34 years until the tree blew down.",
+    "Bald Eagles can live a long time. The oldest recorded bird in the wild was at least 38 years old when it was hit and killed by a car in New York in 2015. It had been banded in the same state in 1977."
+  ]
+}

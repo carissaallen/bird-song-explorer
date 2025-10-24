@@ -1,0 +1,46 @@
+{
+  "common_name": "Common Kingfisher",
+  "scientific_name": "Alcedo atthis",
+  "family": "Alcedinidae",
+  "regions": [
+    "europe/uk",
+    "europe/germany",
+    "europe/france",
+    "asia/china",
+    "asia/japan",
+    "asia/india"
+  ],
+  "primary_habitat": "rivers_and_streams",
+  "habitats": [
+    "rivers",
+    "streams",
+    "lakes",
+    "ponds",
+    "canals"
+  ],
+  "conservation_status": "Least Concern",
+  "size": {
+    "length_cm": "16-17",
+    "wingspan_cm": "24-26",
+    "weight_g": "35-45"
+  },
+  "diet": [
+    "small fish",
+    "aquatic insects",
+    "freshwater shrimp",
+    "tadpoles"
+  ],
+  "breeding_season": "April-September",
+  "migration_pattern": "partial_migrant",
+  "distinctive_features": [
+    "brilliant blue and orange plumage",
+    "long sharp bill",
+    "compact body",
+    "short tail"
+  ],
+  "fun_facts": [
+    "Cornell Cool Facts not available for this species - Common Kingfisher is primarily found in Europe and Asia",
+    "One of the most widespread kingfisher species in the world",
+    "Can dive at speeds up to 25 mph to catch fish"
+  ]
+}

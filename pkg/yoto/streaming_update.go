@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
-	"net/url"
+	"os"
+	"strings"
 	"time"
 )
 
-// StreamingChapter represents a chapter with streaming tracks
 type StreamingChapter struct {
 	Key          string           `json:"key"`
 	Title        string           `json:"title"`
@@ -20,73 +19,99 @@ type StreamingChapter struct {
 	Display      Display          `json:"display,omitempty"`
 }
 
-// StreamingTrack represents a streaming audio track
 type StreamingTrack struct {
 	Key          string  `json:"key"`
 	Title        string  `json:"title,omitempty"`
 	TrackURL     string  `json:"trackUrl"`
-	Type         string  `json:"type"`     // Must be "stream"
-	Format       string  `json:"format"`   // e.g., "mp3"
-	Duration     int     `json:"duration"` // Required, even for streaming
+	Type         string  `json:"type"`
+	Format       string  `json:"format"`
+	Duration     int     `json:"duration"`
 	OverlayLabel string  `json:"overlayLabel,omitempty"`
 	Display      Display `json:"display,omitempty"`
 }
 
-// StreamingContent represents the content structure for streaming
 type StreamingContent struct {
 	Chapters []StreamingChapter `json:"chapters"`
 }
 
-// Bird icon media IDs for Track 2
-var birdIcons = []string{
-	"yoto:#RSsi4eQvVffIDMHbq3cuKn0ebSg0X-3Y-ZxrAorxycY",
-	"yoto:#pcGl9aZOfMwiNUm8Rfu4wRYPkBuDiEB5nwwy76aVtCM",
+var defaultIconID = "yoto:#RSsi4eQvVffIDMHbq3cuKn0ebSg0X-3Y-ZxrAorxycY"
+
+func (cm *ContentManager) uploadTrackIcon(iconPath string, iconName string) string {
+	if cm.iconUploader == nil {
+		fmt.Printf("[STREAMING_UPDATE] Icon uploader not initialized, using default icon\n")
+		return defaultIconID
+	}
+
+	mediaID, err := cm.iconUploader.UploadIcon(iconPath, iconName)
+	if err != nil {
+		fmt.Printf("[STREAMING_UPDATE] Failed to upload icon %s: %v, using default\n", iconName, err)
+		return defaultIconID
+	}
+
+	if !strings.HasPrefix(mediaID, "yoto:#") {
+		mediaID = fmt.Sprintf("yoto:#%s", mediaID)
+	}
+
+	return mediaID
 }
 
-// Music note icon media IDs for Track 3
-var musicNoteIcons = []string{
-	"yoto:#_WWpLHoOj6iqeREcGkJnGlsis2QSF6znM0UPFdXTjf8",
-	"yoto:#feD4F6Xi19d9HF4rEwWtkYeC655CtcHcDA0Ib5UcgNQ",
+func (cm *ContentManager) uploadBirdIconNoCache(iconPath string, iconName string) string {
+	if cm.iconUploader == nil {
+		fmt.Printf("[STREAMING_UPDATE] Icon uploader not initialized, using default icon\n")
+		return defaultIconID
+	}
+
+	mediaID, err := cm.iconUploader.UploadIconNoCache(iconPath, iconName)
+	if err != nil {
+		fmt.Printf("[STREAMING_UPDATE] Failed to upload bird icon %s: %v, using default\n", iconName, err)
+		return defaultIconID
+	}
+
+	if !strings.HasPrefix(mediaID, "yoto:#") {
+		mediaID = fmt.Sprintf("yoto:#%s", mediaID)
+	}
+
+	return mediaID
 }
 
-// getRandomIcon returns a random icon from the given array
-func getRandomIcon(icons []string) string {
-	rand.Seed(time.Now().UnixNano())
-	return icons[rand.Intn(len(icons))]
-}
-
-// UpdateCardWithStreamingTracks updates a card to use streaming URLs
 func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName string, baseURL string, sessionID string) error {
 	if err := cm.client.ensureAuthenticated(); err != nil {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
 
-	// Get existing card to preserve metadata (userId, createdAt, etc.)
 	existingCard, err := cm.client.GetCard(cardID)
 	if err != nil {
 		fmt.Printf("[STREAMING_UPDATE] Warning: Could not get existing card %s: %v\n", cardID, err)
-	} else {
-		fmt.Printf("[STREAMING_UPDATE] Successfully retrieved existing card %s\n", cardID)
-		if existingCard != nil {
-			fmt.Printf("  Existing userId: %s\n", existingCard.UserID)
-			fmt.Printf("  Existing createdAt: %s\n", existingCard.CreatedAt)
-			fmt.Printf("  Existing clientID: %s\n", existingCard.CreatedByClientID)
-		}
 	}
 
-	// Use the provided session ID if available, otherwise generate one
 	if sessionID == "" {
 		sessionID = fmt.Sprintf("%s_%d", cardID, time.Now().Unix())
 	}
 
-	encodedBirdName := url.QueryEscape(birdName)
+	fmt.Printf("[STREAMING_UPDATE] Updating card with session %s for bird: %s\n", sessionID, birdName)
 
-	// Select random icons for each track using Yoto media IDs
-	radioIcon := getRandomIcon(radioIcons)
-	birdIcon := getRandomIcon(birdIcons)
-	musicNoteIcon := getRandomIcon(musicNoteIcons)
-	bookIcon := getRandomIcon(bookIcons)
-	hikingBootIcon := getRandomIcon(hikingBootIcons)
+	binocularsIcon := cm.uploadTrackIcon("./assets/icons/binoculars_16x16.png", "binoculars")
+	musicIcon := cm.uploadTrackIcon("./assets/icons/music_16x16.png", "music")
+
+	var birdIcon string
+	if birdName != "" {
+		birdDir := strings.ToLower(strings.ReplaceAll(birdName, " ", "_"))
+		birdSpecificIconPath := fmt.Sprintf("./assets/icons/%s.png", birdDir)
+
+		// Try bird-specific icon first
+		if _, err := os.Stat(birdSpecificIconPath); err == nil {
+			fmt.Printf("[STREAMING_UPDATE] Uploading bird-specific icon: %s\n", birdSpecificIconPath)
+			birdIcon = cm.uploadBirdIconNoCache(birdSpecificIconPath, birdDir)
+		} else {
+			// Fallback to generic bird icon
+			fmt.Printf("[STREAMING_UPDATE] Bird-specific icon not found at %s, using generic bird icon\n", birdSpecificIconPath)
+			birdIcon = cm.uploadTrackIcon("./assets/icons/bird_16x16.png", "bird")
+		}
+	} else {
+		birdIcon = cm.uploadTrackIcon("./assets/icons/bird_16x16.png", "bird")
+	}
+
+	hikingBootIcon := cm.uploadTrackIcon("./assets/icons/hiking_boot_16x16.png", "hiking_boot")
 
 	chapters := []StreamingChapter{
 		{
@@ -97,18 +122,18 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 				{
 					Key:          "01",
 					Title:        "Welcome, Explorers!",
-					TrackURL:     fmt.Sprintf("%s/api/v1/stream/intro?session=%s&bird=%s", baseURL, sessionID, encodedBirdName),
+					TrackURL:     fmt.Sprintf("%s/api/v1/stream/intro?session=%s", baseURL, sessionID),
 					Type:         "stream",
 					Format:       "mp3",
 					Duration:     30,
 					OverlayLabel: "1",
 					Display: Display{
-						Icon16x16: radioIcon,
+						Icon16x16: binocularsIcon,
 					},
 				},
 			},
 			Display: Display{
-				Icon16x16: radioIcon,
+				Icon16x16: binocularsIcon,
 			},
 		},
 		{
@@ -119,11 +144,33 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 				{
 					Key:          "01",
 					Title:        "Who's Singing Today?",
-					TrackURL:     fmt.Sprintf("%s/api/v1/stream/announcement?session=%s&bird=%s", baseURL, sessionID, encodedBirdName),
+					TrackURL:     fmt.Sprintf("%s/api/v1/stream/announcement?session=%s", baseURL, sessionID),
 					Type:         "stream",
 					Format:       "mp3",
 					Duration:     10,
 					OverlayLabel: "2",
+					Display: Display{
+						Icon16x16: musicIcon,
+					},
+				},
+			},
+			Display: Display{
+				Icon16x16: musicIcon,
+			},
+		},
+		{
+			Key:          "03",
+			Title:        "Bird Explorer's Guide",
+			OverlayLabel: "3",
+			Tracks: []StreamingTrack{
+				{
+					Key:          "01",
+					Title:        "Bird Explorer's Guide",
+					TrackURL:     fmt.Sprintf("%s/api/v1/stream/description?session=%s", baseURL, sessionID),
+					Type:         "stream",
+					Format:       "mp3",
+					Duration:     60,
+					OverlayLabel: "3",
 					Display: Display{
 						Icon16x16: birdIcon,
 					},
@@ -134,62 +181,18 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 			},
 		},
 		{
-			Key:          "03",
-			Title:        "Bird Song",
-			OverlayLabel: "3",
-			Tracks: []StreamingTrack{
-				{
-					Key:          "01",
-					Title:        "Bird Song",
-					TrackURL:     fmt.Sprintf("%s/api/v1/stream/bird-song?session=%s&bird=%s", baseURL, sessionID, encodedBirdName),
-					Type:         "stream",
-					Format:       "mp3",
-					Duration:     30,
-					OverlayLabel: "3",
-					Display: Display{
-						Icon16x16: musicNoteIcon,
-					},
-				},
-			},
-			Display: Display{
-				Icon16x16: musicNoteIcon,
-			},
-		},
-		{
 			Key:          "04",
-			Title:        "Bird Explorer's Guide",
+			Title:        "Happy Exploring!",
 			OverlayLabel: "4",
 			Tracks: []StreamingTrack{
 				{
 					Key:          "01",
-					Title:        "Bird Explorer's Guide",
-					TrackURL:     fmt.Sprintf("%s/api/v1/stream/description?session=%s&bird=%s", baseURL, sessionID, encodedBirdName),
-					Type:         "stream",
-					Format:       "mp3",
-					Duration:     60,
-					OverlayLabel: "4",
-					Display: Display{
-						Icon16x16: bookIcon,
-					},
-				},
-			},
-			Display: Display{
-				Icon16x16: bookIcon,
-			},
-		},
-		{
-			Key:          "05",
-			Title:        "Happy Exploring!",
-			OverlayLabel: "5",
-			Tracks: []StreamingTrack{
-				{
-					Key:          "01",
 					Title:        "Happy Exploring!",
-					TrackURL:     fmt.Sprintf("%s/api/v1/stream/outro?session=%s&bird=%s", baseURL, sessionID, encodedBirdName),
+					TrackURL:     fmt.Sprintf("%s/api/v1/stream/outro?session=%s", baseURL, sessionID),
 					Type:         "stream",
 					Format:       "mp3",
 					Duration:     20,
-					OverlayLabel: "5",
+					OverlayLabel: "4",
 					Display: Display{
 						Icon16x16: hikingBootIcon,
 					},
@@ -201,18 +204,14 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 		},
 	}
 
-	// Extract metadata from existing card (if any)
-
 	metadataMap := make(map[string]interface{})
 
 	if existingCard != nil && existingCard.Metadata != nil {
 		if cover, hasCover := existingCard.Metadata["cover"]; hasCover {
-			metadataMap["cover"] = cover // Preserve the existing cover
+			metadataMap["cover"] = cover
 		}
 	}
 
-	// Build the content update request according to Yoto API spec
-	// Only cardId and content object are allowed at root level
 	contentReq := map[string]interface{}{
 		"cardId": cardID,
 		"content": map[string]interface{}{
@@ -227,18 +226,6 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 		return fmt.Errorf("failed to marshal update request: %w", err)
 	}
 
-	// Debug logging with full request
-	fmt.Printf("[STREAMING_UPDATE] Sending request to Yoto API:\n")
-	fmt.Printf("  cardId: %s\n", cardID)
-	fmt.Printf("  title: Bird Song Explorer\n")
-	fmt.Printf("  chapters: %d\n", len(chapters))
-	fmt.Printf("  Request size: %d bytes\n", len(jsonData))
-
-	// Log the actual JSON for debugging
-	var prettyJSON bytes.Buffer
-	json.Indent(&prettyJSON, jsonData, "", "  ")
-	fmt.Printf("[STREAMING_UPDATE] Full request JSON:\n%s\n", prettyJSON.String())
-
 	url := fmt.Sprintf("%s/content", cm.client.baseURL)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -248,7 +235,6 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cm.client.accessToken))
 
-	// Execute the request
 	resp, err := cm.client.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to update card: %w", err)
@@ -262,13 +248,5 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 	}
 
 	fmt.Printf("Successfully updated card %s with streaming tracks for %s\n", cardID, birdName)
-
-	// Debug logging
-	responsePreview := string(body)
-	if len(responsePreview) > 500 {
-		responsePreview = responsePreview[:500] + "..."
-	}
-	fmt.Printf("Update response (%d): %s\n", resp.StatusCode, responsePreview)
-
 	return nil
 }

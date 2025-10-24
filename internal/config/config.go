@@ -19,8 +19,6 @@ type Config struct {
 	YotoAPIBaseURL     string
 	EBirdAPIKey        string
 	XenoCantoAPIKey    string
-	ElevenLabsAPIKey   string
-	OpenAIAPIKey       string
 	SchedulerToken     string
 	CacheTTLHours      int
 	BirdOfDayResetHour int
@@ -43,8 +41,6 @@ func Load() *Config {
 		YotoAPIBaseURL:     getEnv("YOTO_API_BASE_URL", "https://api.yotoplay.com"),
 		EBirdAPIKey:        getEnv("EBIRD_API_KEY", ""),
 		XenoCantoAPIKey:    getEnv("XENOCANTO_API_KEY", ""),
-		ElevenLabsAPIKey:   getEnv("ELEVENLABS_API_KEY", ""),
-		OpenAIAPIKey:       getEnv("OPENAI_API_KEY", ""),
 		SchedulerToken:     getEnv("SCHEDULER_TOKEN", ""),
 		CacheTTLHours:      24,
 		BirdOfDayResetHour: 6,

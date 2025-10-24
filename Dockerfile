@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 # Install certificates and git
 RUN apk --no-cache add ca-certificates git
@@ -21,7 +21,7 @@ WORKDIR /root/
 COPY --from=builder /app/bird-song-explorer .
 
 COPY assets ./assets/
-COPY prerecorded_tts ./prerecorded_tts/
+COPY birds ./birds/
 
 EXPOSE 8080
 

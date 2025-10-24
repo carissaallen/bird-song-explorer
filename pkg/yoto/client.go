@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/callen/bird-song-explorer/pkg/gcp"
 )
 
 const (
@@ -179,6 +182,12 @@ func (c *Client) refreshAccessToken() error {
 		c.refreshToken = tokenResp.RefreshToken
 	}
 	c.tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+
+	// Update tokens in Secret Manager if AUTO_UPDATE_SECRETS is enabled
+	if err := gcp.UpdateYotoTokens(c.accessToken, c.refreshToken); err != nil {
+		log.Printf("[YOTO_CLIENT] Warning: Failed to update tokens in Secret Manager: %v", err)
+		// Don't fail the refresh if Secret Manager update fails
+	}
 
 	return nil
 }

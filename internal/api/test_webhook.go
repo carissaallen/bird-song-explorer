@@ -19,7 +19,7 @@ func (h *Handler) TestWebhookHandler(c *gin.Context) {
 	if cardID == "" {
 		cardID = h.config.YotoCardID
 	}
-	
+
 	deviceID := c.Query("deviceId")
 	eventType := c.Query("eventType")
 	if eventType == "" {
@@ -52,7 +52,7 @@ func (h *Handler) TestWebhookHandler(c *gin.Context) {
 	// Copy headers from original request
 	req.Header = c.Request.Header.Clone()
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Create a response writer to capture the webhook response
 	rw := &responseWriter{
 		body:       &bytes.Buffer{},
@@ -64,7 +64,7 @@ func (h *Handler) TestWebhookHandler(c *gin.Context) {
 	// Create a proper context with the original request's headers for IP detection
 	req.Header.Set("X-Forwarded-For", c.ClientIP())
 	req.Header.Set("X-Real-IP", c.ClientIP())
-	
+
 	// Create a new gin context for the webhook handler
 	webhookContext := &gin.Context{
 		Request: req,
@@ -72,8 +72,9 @@ func (h *Handler) TestWebhookHandler(c *gin.Context) {
 		Params:  c.Params,
 		Keys:    make(map[string]interface{}),
 	}
-	
-	h.HandleYotoWebhookV4(webhookContext)
+
+	// Use the streaming webhook handler
+	h.HandleYotoWebhookStreaming(webhookContext)
 
 	// Parse the response
 	var webhookResponse map[string]interface{}
@@ -86,12 +87,12 @@ func (h *Handler) TestWebhookHandler(c *gin.Context) {
 	// Return test results
 	c.JSON(http.StatusOK, gin.H{
 		"test_info": gin.H{
-			"description": "Simulated webhook call",
+			"description":     "Simulated webhook call",
 			"webhook_payload": webhook,
-			"client_ip": c.ClientIP(),
+			"client_ip":       c.ClientIP(),
 		},
 		"webhook_response": webhookResponse,
-		"status_code": rw.statusCode,
+		"status_code":      rw.statusCode,
 	})
 }
 

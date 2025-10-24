@@ -1,0 +1,45 @@
+{
+  "common_name": "Atlantic Puffin",
+  "scientific_name": "Fratercula arctica",
+  "family": "Alcidae",
+  "regions": [
+    "north_america/us",
+    "north_america/canada",
+    "europe/iceland",
+    "europe/norway",
+    "europe/uk"
+  ],
+  "primary_habitat": "coastal_cliffs",
+  "habitats": [
+    "coastal cliffs",
+    "rocky islands",
+    "open ocean",
+    "marine waters"
+  ],
+  "conservation_status": "Vulnerable",
+  "size": {
+    "length_cm": "26-29",
+    "wingspan_cm": "47-63",
+    "weight_g": "380-500"
+  },
+  "diet": [
+    "small fish",
+    "sand eels",
+    "herring",
+    "capelin",
+    "marine invertebrates"
+  ],
+  "breeding_season": "May-August",
+  "migration_pattern": "partial_migrant",
+  "distinctive_features": [
+    "colorful orange-red bill in breeding season",
+    "black and white plumage",
+    "orange feet",
+    "clown-like facial markings"
+  ],
+  "fun_facts": [
+    "Puffin chicks are known as \"pufflings.\"",
+    "Half of North America's Atlantic Puffins breed in one location: Witless Bay, Newfoundland, Canada.",
+    "The oldest recorded Atlantic Puffin was banded as a chick in Norway and lived to be 41 years old. But it's likely puffins can live even longer than that; it's only relatively recently that bands durable enough to last 40 years have come into wide use."
+  ]
+}
