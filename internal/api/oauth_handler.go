@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
+	"github.com/callen/bird-song-explorer/pkg/gcp"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,23 +23,46 @@ type OAuthTokenResponse struct {
 
 // HandleTokenRefresh manually triggers a token refresh for testing
 func (h *Handler) HandleTokenRefresh(c *gin.Context) {
+	log.Printf("[TOKEN_REFRESH] Proactive token refresh triggered")
+
 	refreshToken := os.Getenv("YOTO_REFRESH_TOKEN")
 	if refreshToken == "" {
+		log.Printf("[TOKEN_REFRESH] ERROR: No refresh token available")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No refresh token available"})
 		return
 	}
 
+	log.Printf("[TOKEN_REFRESH] Attempting to refresh access token...")
 	tokens, err := h.refreshTokens(refreshToken)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh tokens"})
+		log.Printf("[TOKEN_REFRESH] ERROR: Failed to refresh tokens: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to refresh tokens: %v", err)})
 		return
 	}
 
+	log.Printf("[TOKEN_REFRESH] Token refresh successful, expires in %d seconds", tokens.ExpiresIn)
+
+	// Update in-memory tokens
 	h.yotoClient.SetTokens(tokens.AccessToken, tokens.RefreshToken, tokens.ExpiresIn)
 
+	// Persist to Secret Manager
+	log.Printf("[TOKEN_REFRESH] Persisting tokens to Secret Manager...")
+	if err := gcp.UpdateYotoTokens(tokens.AccessToken, tokens.RefreshToken); err != nil {
+		log.Printf("[TOKEN_REFRESH] WARNING: Failed to update Secret Manager: %v", err)
+		// Don't fail the request - tokens are still refreshed in memory
+		c.JSON(http.StatusOK, gin.H{
+			"status":     "partial_success",
+			"message":    "Tokens refreshed in memory but failed to persist to Secret Manager",
+			"expires_in": tokens.ExpiresIn,
+			"warning":    err.Error(),
+		})
+		return
+	}
+
+	log.Printf("[TOKEN_REFRESH] ✅ Tokens successfully refreshed and persisted to Secret Manager")
 	c.JSON(http.StatusOK, gin.H{
 		"status":     "success",
-		"message":    "Tokens refreshed successfully",
+		"message":    "Tokens refreshed and persisted successfully",
 		"expires_in": tokens.ExpiresIn,
 	})
 }

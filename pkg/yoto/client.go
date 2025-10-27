@@ -149,6 +149,8 @@ func (c *Client) authenticate() error {
 }
 
 func (c *Client) refreshAccessToken() error {
+	log.Printf("[YOTO_CLIENT] Token expired or expiring soon (expiry: %s), refreshing...", c.tokenExpiry.Format(time.RFC3339))
+
 	data := url.Values{}
 	data.Set("grant_type", "refresh_token")
 	data.Set("client_id", c.clientID)
@@ -156,6 +158,7 @@ func (c *Client) refreshAccessToken() error {
 
 	req, err := http.NewRequest("POST", c.authURL, strings.NewReader(data.Encode()))
 	if err != nil {
+		log.Printf("[YOTO_CLIENT] ERROR: Failed to create refresh request: %v", err)
 		return err
 	}
 
@@ -163,17 +166,20 @@ func (c *Client) refreshAccessToken() error {
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
+		log.Printf("[YOTO_CLIENT] ERROR: Token refresh request failed: %v", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[YOTO_CLIENT] ERROR: Token refresh failed with status %d: %s", resp.StatusCode, string(body))
 		return fmt.Errorf("token refresh failed: %d - %s", resp.StatusCode, string(body))
 	}
 
 	var tokenResp TokenResponse
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		log.Printf("[YOTO_CLIENT] ERROR: Failed to parse token response: %v", err)
 		return err
 	}
 
@@ -183,10 +189,15 @@ func (c *Client) refreshAccessToken() error {
 	}
 	c.tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
 
+	log.Printf("[YOTO_CLIENT] ✅ Token refreshed successfully, new expiry: %s", c.tokenExpiry.Format(time.RFC3339))
+
 	// Update tokens in Secret Manager if AUTO_UPDATE_SECRETS is enabled
+	log.Printf("[YOTO_CLIENT] Updating tokens in Secret Manager...")
 	if err := gcp.UpdateYotoTokens(c.accessToken, c.refreshToken); err != nil {
-		log.Printf("[YOTO_CLIENT] Warning: Failed to update tokens in Secret Manager: %v", err)
+		log.Printf("[YOTO_CLIENT] WARNING: Failed to update tokens in Secret Manager: %v", err)
 		// Don't fail the refresh if Secret Manager update fails
+	} else {
+		log.Printf("[YOTO_CLIENT] ✅ Tokens persisted to Secret Manager")
 	}
 
 	return nil

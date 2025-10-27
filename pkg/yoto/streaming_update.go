@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type StreamingChapter struct {
@@ -100,8 +102,11 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 
 		// Try bird-specific icon first
 		if _, err := os.Stat(birdSpecificIconPath); err == nil {
-			fmt.Printf("[STREAMING_UPDATE] ✅ Uploading bird icon for '%s': %s\n", birdName, birdSpecificIconPath)
-			birdIcon = cm.uploadBirdIconNoCache(birdSpecificIconPath, birdDir)
+			// Generate UUID to force Yoto to upload as new icon (not duplicate)
+			iconUUID := uuid.New().String()
+			iconFilename := fmt.Sprintf("%s_%s", birdDir, iconUUID)
+			fmt.Printf("[STREAMING_UPDATE] ✅ Uploading bird icon for '%s': %s as %s\n", birdName, birdSpecificIconPath, iconFilename)
+			birdIcon = cm.uploadBirdIconNoCache(birdSpecificIconPath, iconFilename)
 			fmt.Printf("[STREAMING_UPDATE] ✅ Bird icon uploaded - Bird: %s, Icon ID: %s\n", birdName, birdIcon)
 		} else {
 			// Fallback to generic bird icon
