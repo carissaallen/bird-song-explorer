@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 
+	"github.com/callen/bird-song-explorer/pkg/gcp"
 	"github.com/gin-gonic/gin"
 )
 
@@ -29,11 +31,19 @@ func (h *Handler) HandleTokenRefresh(c *gin.Context) {
 
 	tokens, err := h.refreshTokens(refreshToken)
 	if err != nil {
+		log.Printf("[TOKEN_REFRESH] Failed to refresh tokens: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh tokens"})
 		return
 	}
 
 	h.yotoClient.SetTokens(tokens.AccessToken, tokens.RefreshToken, tokens.ExpiresIn)
+
+	// Persist tokens to Secret Manager so new instances get the fresh tokens
+	if err := gcp.UpdateYotoTokens(tokens.AccessToken, tokens.RefreshToken); err != nil {
+		log.Printf("[TOKEN_REFRESH] Warning: Failed to update tokens in Secret Manager: %v", err)
+	} else {
+		log.Printf("[TOKEN_REFRESH] ✅ Successfully persisted tokens to Secret Manager")
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":     "success",
