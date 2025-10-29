@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 type IconUploader struct {
@@ -145,9 +146,13 @@ func (iu *IconUploader) UploadIconNoCache(filePath string, filename string) (str
 		contentType = "image/jpeg"
 	}
 
+	// Add timestamp to filename to force fresh upload and prevent caching
+	timestamp := fmt.Sprintf("%d", time.Now().UnixNano())
+	filenameWithTimestamp := fmt.Sprintf("%s_%s", filename, timestamp)
+
 	// Build URL with query parameters - use autoConvert=true for static images
 	url := fmt.Sprintf("%s/media/displayIcons/user/me/upload?autoConvert=true&filename=%s",
-		iu.client.baseURL, filename)
+		iu.client.baseURL, filenameWithTimestamp)
 
 	// Create request with raw image data (as shown in Yoto docs)
 	req, err := http.NewRequest("POST", url, bytes.NewReader(iconData))
@@ -185,7 +190,7 @@ func (iu *IconUploader) UploadIconNoCache(filePath string, filename string) (str
 	}
 
 	// DO NOT cache - return the media ID directly
-	fmt.Printf("[ICON_UPLOADER] Uploaded icon (no cache) %s: %s\n", filename, uploadResp.DisplayIcon.MediaID)
+	fmt.Printf("[ICON_UPLOADER] Uploaded icon (no cache) %s: %s\n", filenameWithTimestamp, uploadResp.DisplayIcon.MediaID)
 	return uploadResp.DisplayIcon.MediaID, nil
 }
 

@@ -87,6 +87,65 @@ func (h *Handler) getOrCreateSession(c *gin.Context, sessionID string) *Streamin
 	return newSession
 }
 
+// getDailyBirdWithFallback gets the bird from cache with timezone awareness
+// If cache fails, falls back to GetCyclingBird() and updates the card
+func (h *Handler) getDailyBirdWithFallback(c *gin.Context, context string) (string, error) {
+	now := time.Now().UTC()
+	var lookupDate string
+
+	// Timezone-aware cache lookup
+	// Before 12:00 UTC: use yesterday's bird (matches yesterday's card icon)
+	// After 12:00 UTC: use today's bird (matches today's card icon)
+	if now.Hour() < 12 {
+		yesterday := now.AddDate(0, 0, -1)
+		lookupDate = yesterday.Format("2006-01-02")
+		log.Printf("[STREAMING] %s: Before daily update (hour=%d), looking up yesterday: %s", context, now.Hour(), lookupDate)
+	} else {
+		lookupDate = now.Format("2006-01-02")
+		log.Printf("[STREAMING] %s: After daily update (hour=%d), looking up today: %s", context, now.Hour(), lookupDate)
+	}
+
+	// Try primary lookup
+	cachedBirdName, exists := h.updateCache.GetDailyGlobalBird(lookupDate)
+	if exists && cachedBirdName != "" {
+		log.Printf("[STREAMING] %s: ✅ Using cached daily bird: %s (date: %s)", context, cachedBirdName, lookupDate)
+		return cachedBirdName, nil
+	}
+
+	// Try yesterday as backup (in case cache failed)
+	yesterday := now.AddDate(0, 0, -1)
+	cachedBirdName, exists = h.updateCache.GetDailyGlobalBird(yesterday.Format("2006-01-02"))
+	if exists && cachedBirdName != "" {
+		log.Printf("[STREAMING] %s: ⚠️  Primary cache miss, using yesterday's bird: %s", context, cachedBirdName)
+		return cachedBirdName, nil
+	}
+
+	// Fallback: Get cycling bird AND update card with new icon
+	log.Printf("[STREAMING] %s: ❌ Cache failed, falling back to GetCyclingBird()", context)
+	bird := h.availableBirds.GetCyclingBird()
+	if bird == nil {
+		return "", fmt.Errorf("no bird available")
+	}
+
+	// Update the card with the fallback bird's icon
+	cardID := h.config.YotoCardID
+	if cardID != "" {
+		baseURL := fmt.Sprintf("https://%s", c.Request.Host)
+		sessionID := fmt.Sprintf("%s_%d", cardID, now.Unix())
+
+		log.Printf("[STREAMING] %s: 🔄 Updating card with fallback bird: %s", context, bird.CommonName)
+		contentManager := h.yotoClient.NewContentManager()
+		err := contentManager.UpdateCardWithStreamingTracks(cardID, bird.CommonName, baseURL, sessionID)
+		if err != nil {
+			log.Printf("[STREAMING] %s: ⚠️  Failed to update card: %v", context, err)
+		} else {
+			log.Printf("[STREAMING] %s: ✅ Card updated with fresh icon for: %s", context, bird.CommonName)
+		}
+	}
+
+	return bird.CommonName, nil
+}
+
 func (h *Handler) StreamIntro(c *gin.Context) {
 	birdName := c.Query("bird")
 	sessionID := c.Query("session")
@@ -95,27 +154,16 @@ func (h *Handler) StreamIntro(c *gin.Context) {
 	if birdName != "" && session.BirdName != birdName {
 		session.BirdName = birdName
 	} else if session.BirdName == "" {
-		// Get the daily bird from cache (set by scheduler at 12:00 UTC)
-		localDate := time.Now().UTC().Format("2006-01-02")
-		cachedBirdName, exists := h.updateCache.GetDailyGlobalBird(localDate)
-		if exists && cachedBirdName != "" {
-			session.BirdName = cachedBirdName
-			log.Printf("[STREAMING] intro: Using cached daily bird: %s", cachedBirdName)
-		} else {
-			// Fallback: Get the current cycling bird
-			bird := h.availableBirds.GetCyclingBird()
-			if bird != nil {
-				session.BirdName = bird.CommonName
-				session.ScientificName = bird.ScientificName
-				log.Printf("[STREAMING] intro: Using cycling bird: %s", bird.CommonName)
-			} else {
-				log.Printf("[STREAMING] intro: No bird available")
-				c.JSON(http.StatusServiceUnavailable, gin.H{
-					"error": "Bird content not ready yet. Please try again in a few minutes.",
-				})
-				return
-			}
+		// Get bird with timezone-aware caching and fallback
+		selectedBird, err := h.getDailyBirdWithFallback(c, "intro")
+		if err != nil {
+			log.Printf("[STREAMING] intro: %v", err)
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "Bird content not ready yet. Please try again in a few minutes.",
+			})
+			return
 		}
+		session.BirdName = selectedBird
 	}
 
 	birdDir := strings.ToLower(strings.ReplaceAll(session.BirdName, " ", "_"))
@@ -132,28 +180,16 @@ func (h *Handler) StreamBirdAnnouncement(c *gin.Context) {
 
 	birdName := session.BirdName
 	if birdName == "" {
-		// First try to get the daily bird from cache (set by scheduler at 12:00 UTC)
-		localDate := time.Now().UTC().Format("2006-01-02")
-		cachedBirdName, exists := h.updateCache.GetDailyGlobalBird(localDate)
-		if exists && cachedBirdName != "" {
-			birdName = cachedBirdName
-			session.BirdName = birdName
-			sessionStore[session.SessionID] = session
-			log.Printf("[STREAMING] announcement: Using cached daily bird: %s", birdName)
-		} else {
-			// Fallback: Get the current cycling bird
-			bird := h.availableBirds.GetCyclingBird()
-			if bird != nil {
-				birdName = bird.CommonName
-				session.BirdName = birdName
-				sessionStore[session.SessionID] = session
-				log.Printf("[STREAMING] announcement: Using cycling bird: %s", birdName)
-			} else {
-				log.Printf("[STREAMING] announcement: No bird available")
-				c.Status(http.StatusBadRequest)
-				return
-			}
+		// Get bird with timezone-aware caching and fallback
+		selectedBird, err := h.getDailyBirdWithFallback(c, "announcement")
+		if err != nil {
+			log.Printf("[STREAMING] announcement: %v", err)
+			c.Status(http.StatusBadRequest)
+			return
 		}
+		birdName = selectedBird
+		session.BirdName = birdName
+		sessionStore[session.SessionID] = session
 	}
 
 	birdDir := strings.ToLower(strings.ReplaceAll(birdName, " ", "_"))
@@ -168,28 +204,16 @@ func (h *Handler) StreamDescription(c *gin.Context) {
 
 	birdName := session.BirdName
 	if birdName == "" {
-		// First try to get the daily bird from cache (set by scheduler at 12:00 UTC)
-		localDate := time.Now().UTC().Format("2006-01-02")
-		cachedBirdName, exists := h.updateCache.GetDailyGlobalBird(localDate)
-		if exists && cachedBirdName != "" {
-			birdName = cachedBirdName
-			session.BirdName = birdName
-			sessionStore[session.SessionID] = session
-			log.Printf("[STREAMING] description: Using cached daily bird: %s", birdName)
-		} else {
-			// Fallback: Get the current cycling bird
-			bird := h.availableBirds.GetCyclingBird()
-			if bird != nil {
-				birdName = bird.CommonName
-				session.BirdName = birdName
-				sessionStore[session.SessionID] = session
-				log.Printf("[STREAMING] description: Using cycling bird: %s", birdName)
-			} else {
-				log.Printf("[STREAMING] description: No bird available")
-				c.Status(http.StatusBadRequest)
-				return
-			}
+		// Get bird with timezone-aware caching and fallback
+		selectedBird, err := h.getDailyBirdWithFallback(c, "description")
+		if err != nil {
+			log.Printf("[STREAMING] description: %v", err)
+			c.Status(http.StatusBadRequest)
+			return
 		}
+		birdName = selectedBird
+		session.BirdName = birdName
+		sessionStore[session.SessionID] = session
 	}
 
 	birdDir := strings.ToLower(strings.ReplaceAll(birdName, " ", "_"))
@@ -204,28 +228,16 @@ func (h *Handler) StreamOutro(c *gin.Context) {
 
 	birdName := session.BirdName
 	if birdName == "" {
-		// First try to get the daily bird from cache (set by scheduler at 12:00 UTC)
-		localDate := time.Now().UTC().Format("2006-01-02")
-		cachedBirdName, exists := h.updateCache.GetDailyGlobalBird(localDate)
-		if exists && cachedBirdName != "" {
-			birdName = cachedBirdName
-			session.BirdName = birdName
-			sessionStore[session.SessionID] = session
-			log.Printf("[STREAMING] outro: Using cached daily bird: %s", birdName)
-		} else {
-			// Fallback: Get the current cycling bird
-			bird := h.availableBirds.GetCyclingBird()
-			if bird != nil {
-				birdName = bird.CommonName
-				session.BirdName = birdName
-				sessionStore[session.SessionID] = session
-				log.Printf("[STREAMING] outro: Using cycling bird: %s", birdName)
-			} else {
-				log.Printf("[STREAMING] outro: No bird available")
-				c.Status(http.StatusBadRequest)
-				return
-			}
+		// Get bird with timezone-aware caching and fallback
+		selectedBird, err := h.getDailyBirdWithFallback(c, "outro")
+		if err != nil {
+			log.Printf("[STREAMING] outro: %v", err)
+			c.Status(http.StatusBadRequest)
+			return
 		}
+		birdName = selectedBird
+		session.BirdName = birdName
+		sessionStore[session.SessionID] = session
 	}
 
 	birdDir := strings.ToLower(strings.ReplaceAll(birdName, " ", "_"))
