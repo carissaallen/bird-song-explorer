@@ -49,18 +49,18 @@ func NewAvailableBirdsService() *AvailableBirdsService {
 			Region:         "oceania",
 			Regions:        []string{"oceania", "new_zealand", "australia", "global"},
 		},
-		//{
-		//	CommonName:     "Bald Eagle",
-		//	ScientificName: "Haliaeetus leucocephalus",
-		//	Region:         "north_america",
-		//	Regions:        []string{"north_america", "us", "canada", "global"},
-		//},
-		//{
-		//	CommonName:     "Common Kingfisher",
-		//	ScientificName: "Alcedo atthis",
-		//	Region:         "europe",
-		//	Regions:        []string{"europe", "asia", "uk", "germany", "france", "spain", "russia", "china", "japan", "global"},
-		//},
+		{
+			CommonName:     "Bald Eagle",
+			ScientificName: "Haliaeetus leucocephalus",
+			Region:         "north_america",
+			Regions:        []string{"north_america", "us", "canada", "global"},
+		},
+		{
+			CommonName:     "Common Kingfisher",
+			ScientificName: "Alcedo atthis",
+			Region:         "europe",
+			Regions:        []string{"europe", "asia", "uk", "germany", "france", "spain", "russia", "china", "japan", "global"},
+		},
 		//{
 		//	CommonName:     "Laughing Kookaburra",
 		//	ScientificName: "Dacelo novaeguineae",
