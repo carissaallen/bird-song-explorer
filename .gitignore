@@ -41,6 +41,7 @@ docs/
 
 # Build output
 /bird-song-explorer
+/static_playlist
 /bin/
 /dist/
 
