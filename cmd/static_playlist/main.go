@@ -23,6 +23,7 @@ type TrackConfig struct {
 	Title     string `json:"title"`
 	AudioPath string `json:"audio_path"`
 	Icon      string `json:"icon"`
+	Duration  int    `json:"duration"`
 }
 
 func main() {
@@ -50,7 +51,7 @@ func main() {
 	// Print track listing
 	for i, track := range playlist.Tracks {
 		audioURL := fmt.Sprintf("%s/%s", playlist.GCSBase, track.AudioPath)
-		fmt.Printf("  %d. %s\n     %s\n     icon: %s\n", i+1, track.Title, audioURL, track.Icon)
+		fmt.Printf("  %d. %s (%d:%02d)\n     %s\n     icon: %s\n", i+1, track.Title, track.Duration/60, track.Duration%60, audioURL, track.Icon)
 	}
 	fmt.Println()
 
@@ -101,6 +102,11 @@ func main() {
 		overlayLabel := fmt.Sprintf("%d", i+1)
 		audioURL := fmt.Sprintf("%s/%s", playlist.GCSBase, track.AudioPath)
 
+		duration := track.Duration
+		if duration <= 0 {
+			duration = 60
+		}
+
 		// Upload icon
 		iconID := yoto.DefaultIconID
 		if _, statErr := os.Stat(track.Icon); statErr == nil {
@@ -127,7 +133,7 @@ func main() {
 					TrackURL: audioURL,
 					Type:     "stream",
 					Format:   "mp3",
-					Duration: 60,
+					Duration: duration,
 					Display: yoto.Display{
 						Icon16x16: iconID,
 					},
