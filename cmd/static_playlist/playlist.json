@@ -1,0 +1,46 @@
+{
+  "title": "Bird Song Explorer",
+  "gcs_base": "https://cdn.yotomyomagic.com/bird-song-explorer/card/audio",
+  "tracks": [
+    {
+      "title": "Welcome, Explorers!",
+      "audio_path": "01-welcome.mp3",
+      "icon": "./assets/icons/binoculars_16x16.png"
+    },
+    {
+      "title": "Western Meadowlark",
+      "audio_path": "02-western-meadowlark.mp3",
+      "icon": "./assets/icons/western_meadowlark.png"
+    },
+    {
+      "title": "Atlantic Puffin",
+      "audio_path": "03-atlantic-puffin.mp3",
+      "icon": "./assets/icons/atlantic_puffin.png"
+    },
+    {
+      "title": "Great Spotted Woodpecker",
+      "audio_path": "04-great-spotted-woodpecker.mp3",
+      "icon": "./assets/icons/great_spotted_woodpecker.png"
+    },
+    {
+      "title": "Brown Kiwi",
+      "audio_path": "05-brown-kiwi.mp3",
+      "icon": "./assets/icons/brown_kiwi.png"
+    },
+    {
+      "title": "Bald Eagle",
+      "audio_path": "06-bald-eagle.mp3",
+      "icon": "./assets/icons/bald_eagle.png"
+    },
+    {
+      "title": "Common Kingfisher",
+      "audio_path": "07-common-kingfisher.mp3",
+      "icon": "./assets/icons/common_kingfisher.png"
+    },
+    {
+      "title": "Happy Exploring!",
+      "audio_path": "08-happy-exploring.mp3",
+      "icon": "./assets/icons/hiking_boot_16x16.png"
+    }
+  ]
+}

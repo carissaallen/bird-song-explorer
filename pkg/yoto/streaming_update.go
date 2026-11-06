@@ -36,6 +36,9 @@ type StreamingContent struct {
 
 var defaultIconID = "yoto:#RSsi4eQvVffIDMHbq3cuKn0ebSg0X-3Y-ZxrAorxycY"
 
+// DefaultIconID is the exported version of the default icon ID for use by CLI tools.
+var DefaultIconID = defaultIconID
+
 func (cm *ContentManager) uploadTrackIcon(iconPath string, iconName string) string {
 	if cm.iconUploader == nil {
 		fmt.Printf("[STREAMING_UPDATE] Icon uploader not initialized, using default icon\n")
@@ -250,5 +253,62 @@ func (cm *ContentManager) UpdateCardWithStreamingTracks(cardID string, birdName 
 	}
 
 	fmt.Printf("[STREAMING_UPDATE] ✅ Card %s updated - Bird: '%s', Icon: %s, Session: %s\n", cardID, birdName, birdIcon, sessionID)
+	return nil
+}
+
+// UpdateCardWithStaticPlaylist updates a card with a static set of chapters (no streaming server needed).
+func (cm *ContentManager) UpdateCardWithStaticPlaylist(cardID string, title string, chapters []StreamingChapter) error {
+	if err := cm.client.ensureAuthenticated(); err != nil {
+		return fmt.Errorf("authentication failed: %w", err)
+	}
+
+	existingCard, err := cm.client.GetCard(cardID)
+	if err != nil {
+		fmt.Printf("[STATIC_PLAYLIST] Warning: Could not get existing card %s: %v\n", cardID, err)
+	}
+
+	metadataMap := make(map[string]interface{})
+	if existingCard != nil && existingCard.Metadata != nil {
+		if cover, hasCover := existingCard.Metadata["cover"]; hasCover {
+			metadataMap["cover"] = cover
+		}
+	}
+
+	contentReq := map[string]interface{}{
+		"cardId": cardID,
+		"content": map[string]interface{}{
+			"title":    title,
+			"chapters": chapters,
+			"metadata": metadataMap,
+		},
+	}
+
+	jsonData, err := json.Marshal(contentReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal update request: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/content", cm.client.baseURL)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cm.client.accessToken))
+
+	resp, err := cm.client.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to update card: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("failed to update card content (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	fmt.Printf("[STATIC_PLAYLIST] Card %s updated with %d chapters\n", cardID, len(chapters))
 	return nil
 }
