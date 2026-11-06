@@ -5,42 +5,50 @@
     {
       "title": "Welcome, Explorers!",
       "audio_path": "01-welcome.mp3",
-      "icon": "./assets/icons/binoculars_16x16.png"
+      "icon": "./assets/icons/binoculars_16x16.png",
+      "duration": 6
     },
     {
       "title": "Western Meadowlark",
       "audio_path": "02-western-meadowlark.mp3",
-      "icon": "./assets/icons/western_meadowlark.png"
+      "icon": "./assets/icons/western_meadowlark.png",
+      "duration": 68
     },
     {
       "title": "Atlantic Puffin",
       "audio_path": "03-atlantic-puffin.mp3",
-      "icon": "./assets/icons/atlantic_puffin.png"
+      "icon": "./assets/icons/atlantic_puffin.png",
+      "duration": 177
     },
     {
       "title": "Great Spotted Woodpecker",
       "audio_path": "04-great-spotted-woodpecker.mp3",
-      "icon": "./assets/icons/great_spotted_woodpecker.png"
+      "icon": "./assets/icons/great_spotted_woodpecker.png",
+      "duration": 119
     },
     {
       "title": "Brown Kiwi",
       "audio_path": "05-brown-kiwi.mp3",
-      "icon": "./assets/icons/brown_kiwi.png"
+      "icon": "./assets/icons/brown_kiwi.png",
+      "duration": 172
     },
     {
       "title": "Bald Eagle",
       "audio_path": "06-bald-eagle.mp3",
-      "icon": "./assets/icons/bald_eagle.png"
+      "icon": "./assets/icons/bald_eagle.png",
+      "duration": 252
     },
     {
       "title": "Common Kingfisher",
       "audio_path": "07-common-kingfisher.mp3",
-      "icon": "./assets/icons/common_kingfisher.png"
+      "icon": "./assets/icons/common_kingfisher.png",
+      "duration": 268
     },
     {
       "title": "Happy Exploring!",
       "audio_path": "08-happy-exploring.mp3",
-      "icon": "./assets/icons/hiking_boot_16x16.png"
+      "icon": "./assets/icons/hiking_boot_16x16.png",
+      "duration": 14
     }
   ]
 }
